@@ -72,7 +72,6 @@ class AdController extends Controller
         ]);
 
         $ad->update($request->only(['title', 'description', 'image_url', 'destination_url']));
-        $ad->update(['status' => 'pending']); // Re-review after edit
 
         return response()->json([
             'status' => 'success',
