@@ -136,8 +136,7 @@
         if (hasImage && hasText) {
           // Rich card: image thumbnail + title + description (native style)
           html = '<div style="position:relative;background:#fff;border-radius:10px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 1px 6px rgba(0,0,0,0.08);overflow:hidden;">'
-            + '<div style="padding:3px 10px 0;"><span style="display:inline-block;font-size:9px;font-weight:600;color:#FF3131;background:#FFF1F1;padding:2px 8px;border-radius:4px;letter-spacing:0.3px;">Reklam</span></div>'
-            + '<a href="' + clickUrl + '" target="_blank" rel="noopener" style="text-decoration:none;color:#1f2937;display:flex;align-items:center;gap:12px;padding:8px 12px 10px;">'
+            + '<a href="' + clickUrl + '" target="_blank" rel="noopener" style="text-decoration:none;color:#1f2937;display:flex;align-items:center;gap:12px;padding:10px 12px;">'
             + '<div style="width:72px;height:72px;border-radius:8px;overflow:hidden;flex-shrink:0;background:#f3f4f6;display:flex;align-items:center;justify-content:center;">'
             + '<img src="' + ad.image_url + '" alt="' + escapeHtml(ad.title) + '" style="width:100%;height:100%;object-fit:cover;" />'
             + '</div>'
