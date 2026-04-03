@@ -48,22 +48,14 @@ class StatsController extends Controller
             ->limit(10)
             ->get();
 
-        // Totals
-        $totalImpressions = Impression::where('campaign_id', $campaignId)
-            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)->count();
-        $totalClicks = Click::where('campaign_id', $campaignId)
-            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)->count();
+        $totals = $this->getTotals('campaign_id', $campaignId, $from, $to);
+        $totals['spent'] = $campaign->spent;
+        $totals['budget'] = $campaign->budget;
 
         return response()->json([
             'status' => 'success',
             'data' => [
-                'totals' => [
-                    'impressions' => $totalImpressions,
-                    'clicks' => $totalClicks,
-                    'ctr' => $totalImpressions > 0 ? round(($totalClicks / $totalImpressions) * 100, 2) : 0,
-                    'spent' => $campaign->spent,
-                    'budget' => $campaign->budget,
-                ],
+                'totals' => $totals,
                 'daily' => $daily,
                 'by_device' => $byDevice,
                 'by_country' => $byCountry,
@@ -96,19 +88,12 @@ class StatsController extends Controller
         $byDevice = $this->getBreakdown('device_type', 'ad_unit_id', $adUnitId, $from, $to);
         $byCountry = $this->getBreakdown('country', 'ad_unit_id', $adUnitId, $from, $to);
 
-        $totalImpressions = Impression::where('ad_unit_id', $adUnitId)
-            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)->count();
-        $totalClicks = Click::where('ad_unit_id', $adUnitId)
-            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)->count();
+        $totals = $this->getTotals('ad_unit_id', $adUnitId, $from, $to);
 
         return response()->json([
             'status' => 'success',
             'data' => [
-                'totals' => [
-                    'impressions' => $totalImpressions,
-                    'clicks' => $totalClicks,
-                    'ctr' => $totalImpressions > 0 ? round(($totalClicks / $totalImpressions) * 100, 2) : 0,
-                ],
+                'totals' => $totals,
                 'daily' => $daily,
                 'by_device' => $byDevice,
                 'by_country' => $byCountry,
@@ -154,21 +139,14 @@ class StatsController extends Controller
                 ];
             });
 
-        $totalImpressions = Impression::where('advertiser_id', $advertiser->id)
-            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)->count();
-        $totalClicks = Click::where('advertiser_id', $advertiser->id)
-            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)->count();
+        $totals = $this->getTotals('advertiser_id', $advertiser->id, $from, $to);
+        $totals['balance'] = $advertiser->balance;
+        $totals['total_spent'] = $advertiser->total_spent;
 
         return response()->json([
             'status' => 'success',
             'data' => [
-                'totals' => [
-                    'impressions' => $totalImpressions,
-                    'clicks' => $totalClicks,
-                    'ctr' => $totalImpressions > 0 ? round(($totalClicks / $totalImpressions) * 100, 2) : 0,
-                    'balance' => $advertiser->balance,
-                    'total_spent' => $advertiser->total_spent,
-                ],
+                'totals' => $totals,
                 'daily' => $daily,
                 'by_device' => $byDevice,
                 'by_country' => $byCountry,
@@ -215,19 +193,12 @@ class StatsController extends Controller
                 ];
             });
 
-        $totalImpressions = Impression::where('publisher_id', $publisher->id)
-            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)->count();
-        $totalClicks = Click::where('publisher_id', $publisher->id)
-            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)->count();
+        $totals = $this->getTotals('publisher_id', $publisher->id, $from, $to);
 
         return response()->json([
             'status' => 'success',
             'data' => [
-                'totals' => [
-                    'impressions' => $totalImpressions,
-                    'clicks' => $totalClicks,
-                    'ctr' => $totalImpressions > 0 ? round(($totalClicks / $totalImpressions) * 100, 2) : 0,
-                ],
+                'totals' => $totals,
                 'daily' => $daily,
                 'by_device' => $byDevice,
                 'by_country' => $byCountry,
@@ -236,6 +207,31 @@ class StatsController extends Controller
                 'to' => $to,
             ],
         ]);
+    }
+
+    /**
+     * Get total and unique counts for impressions and clicks
+     */
+    private function getTotals(string $column, $value, string $from, string $to): array
+    {
+        $impressions = Impression::where($column, $value)
+            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)->count();
+        $uniqueImpressions = Impression::where($column, $value)
+            ->where('is_unique', true)
+            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)->count();
+        $clicks = Click::where($column, $value)
+            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)->count();
+        $uniqueClicks = Click::where($column, $value)
+            ->where('is_unique', true)
+            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)->count();
+
+        return [
+            'impressions' => $impressions,
+            'unique_impressions' => $uniqueImpressions,
+            'clicks' => $clicks,
+            'unique_clicks' => $uniqueClicks,
+            'ctr' => $uniqueImpressions > 0 ? round(($uniqueClicks / $uniqueImpressions) * 100, 2) : 0,
+        ];
     }
 
     /**

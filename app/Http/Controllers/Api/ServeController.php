@@ -126,21 +126,6 @@ class ServeController extends Controller
         }
         Cache::put($rateKey, $rateCount + 1, self::IMPRESSION_RATE_WINDOW);
 
-        // 4. Primary dedup: vid + ad + unit (browser-level unique visitor)
-        $dedupKey = "imp:{$vid}:{$request->ad_id}:{$request->unit_id}";
-        if (Cache::has($dedupKey)) {
-            return response()->json(['status' => 'ok']);
-        }
-        Cache::put($dedupKey, true, self::IMPRESSION_WINDOW);
-
-        // 5. Secondary dedup: IP + UA hash + ad + unit (catches cleared localStorage)
-        $uaHash = substr(md5($ua), 0, 8);
-        $ipDedupKey = "imp_ip:{$ip}:{$uaHash}:{$request->ad_id}:{$request->unit_id}";
-        if (Cache::has($ipDedupKey)) {
-            return response()->json(['status' => 'ok']);
-        }
-        Cache::put($ipDedupKey, true, self::IMPRESSION_WINDOW);
-
         $ad = Ad::with('campaign.advertiser')->find($request->ad_id);
         $adUnit = AdUnit::find($request->unit_id);
 
@@ -148,14 +133,32 @@ class ServeController extends Controller
             return response()->json(['status' => 'error'], 400);
         }
 
-        // 6. Referrer check
+        // 4. Referrer check
         $referrer = $request->header('Referer', '');
         if (!$this->isReferrerValid($referrer, $adUnit->website_url)) {
             Log::info('Impression referrer mismatch', ['referrer' => $referrer, 'unit' => $adUnit->website_url, 'ip' => $ip]);
             return response()->json(['status' => 'ok']);
         }
 
-        // Record impression with device/browser/country
+        // 5. Check uniqueness (dedup)
+        $isUnique = true;
+
+        $dedupKey = "imp:{$vid}:{$request->ad_id}:{$request->unit_id}";
+        if (Cache::has($dedupKey)) {
+            $isUnique = false;
+        } else {
+            Cache::put($dedupKey, true, self::IMPRESSION_WINDOW);
+            // Secondary dedup: IP + UA hash
+            $uaHash = substr(md5($ua), 0, 8);
+            $ipDedupKey = "imp_ip:{$ip}:{$uaHash}:{$request->ad_id}:{$request->unit_id}";
+            if (Cache::has($ipDedupKey)) {
+                $isUnique = false;
+            } else {
+                Cache::put($ipDedupKey, true, self::IMPRESSION_WINDOW);
+            }
+        }
+
+        // 6. Always record impression
         $parsed = TrackingHelper::parseUserAgent($ua);
         $country = TrackingHelper::getCountryFromIp($ip);
 
@@ -171,10 +174,11 @@ class ServeController extends Controller
             'device_type' => $parsed['device_type'],
             'browser' => $parsed['browser'],
             'os' => $parsed['os'],
+            'is_unique' => $isUnique,
         ]);
 
-        // Charge CPM and credit publisher
-        if ($ad->campaign->cpm_bid && $ad->campaign->advertiser) {
+        // 7. Only charge CPM for unique impressions
+        if ($isUnique && $ad->campaign->cpm_bid && $ad->campaign->advertiser) {
             $cost = $ad->campaign->cpm_bid / 1000;
             if ($ad->campaign->advertiser->balance >= $cost) {
                 $ad->campaign->increment('spent', $cost);
@@ -226,22 +230,7 @@ class ServeController extends Controller
         }
         Cache::put($rateKey, $rateCount + 1, self::CLICK_RATE_WINDOW);
 
-        // 4. Primary dedup: vid + ad (browser-level)
-        $dedupKey = "click:{$vid}:{$adId}";
-        if (Cache::has($dedupKey)) {
-            return redirect($ad->destination_url);
-        }
-        Cache::put($dedupKey, true, self::CLICK_WINDOW);
-
-        // 5. Secondary dedup: IP + UA hash + ad (catches cleared localStorage)
-        $uaHash = substr(md5($ua), 0, 8);
-        $ipDedupKey = "click_ip:{$ip}:{$uaHash}:{$adId}";
-        if (Cache::has($ipDedupKey)) {
-            return redirect($ad->destination_url);
-        }
-        Cache::put($ipDedupKey, true, self::IP_CLICK_WINDOW);
-
-        // 6. Referrer check
+        // 4. Referrer check
         if ($adUnit) {
             $referrer = $request->header('Referer', '');
             if (!$this->isReferrerValid($referrer, $adUnit->website_url)) {
@@ -250,7 +239,24 @@ class ServeController extends Controller
             }
         }
 
-        // Record click with device/browser/country
+        // 5. Check uniqueness
+        $isUnique = true;
+
+        $dedupKey = "click:{$vid}:{$adId}";
+        if (Cache::has($dedupKey)) {
+            $isUnique = false;
+        } else {
+            Cache::put($dedupKey, true, self::CLICK_WINDOW);
+            $uaHash = substr(md5($ua), 0, 8);
+            $ipDedupKey = "click_ip:{$ip}:{$uaHash}:{$adId}";
+            if (Cache::has($ipDedupKey)) {
+                $isUnique = false;
+            } else {
+                Cache::put($ipDedupKey, true, self::IP_CLICK_WINDOW);
+            }
+        }
+
+        // 6. Always record click
         $parsed = TrackingHelper::parseUserAgent($ua);
         $country = TrackingHelper::getCountryFromIp($ip);
 
@@ -267,10 +273,11 @@ class ServeController extends Controller
             'device_type' => $parsed['device_type'],
             'browser' => $parsed['browser'],
             'os' => $parsed['os'],
+            'is_unique' => $isUnique,
         ]);
 
-        // Charge CPC and credit publisher
-        if ($ad->campaign->cpc_bid && $ad->campaign->advertiser) {
+        // Only charge CPC for unique clicks
+        if ($isUnique && $ad->campaign->cpc_bid && $ad->campaign->advertiser) {
             $cost = $ad->campaign->cpc_bid;
             if ($ad->campaign->advertiser->balance >= $cost) {
                 $ad->campaign->increment('spent', $cost);

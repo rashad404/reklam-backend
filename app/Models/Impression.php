@@ -11,7 +11,7 @@ class Impression extends Model
     protected $fillable = [
         'ad_id', 'ad_unit_id', 'campaign_id', 'advertiser_id',
         'publisher_id', 'ip', 'user_agent', 'country',
-        'device_type', 'browser', 'os',
+        'device_type', 'browser', 'os', 'is_unique',
     ];
 
     public function ad()
