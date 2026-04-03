@@ -95,6 +95,15 @@
         }
 
         var ad = data.ad;
+        // Resolve relative URLs using the same base as serve.js
+        var SITE_BASE = API_BASE.replace(/\/api$/, '');
+        function resolveUrl(u) {
+          if (!u) return u;
+          if (u.match(/^https?:\/\//)) return u;
+          return SITE_BASE + u;
+        }
+        ad.click_url = resolveUrl(ad.click_url);
+        ad.image_url = resolveUrl(ad.image_url);
         var clickUrl = ad.click_url + '?unit=' + unitId + '&vid=' + encodeURIComponent(vid);
 
         // Reklam.biz icon - exact logo rocket/arrow shape

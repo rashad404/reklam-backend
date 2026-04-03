@@ -71,15 +71,24 @@ class ServeController extends Controller
         // Weighted random selection: higher bid = shown more often
         $ad = $this->selectByWeight($ads);
 
+        // Return relative paths - serve.js will prepend the correct base URL
+        $imageUrl = $ad->image_url;
+        if ($imageUrl && preg_match('#https?://#', $imageUrl)) {
+            $path = parse_url($imageUrl, PHP_URL_PATH);
+            if ($path) {
+                $imageUrl = $path; // /storage/banners/xxx.png
+            }
+        }
+
         return response()->json([
             'ad' => [
                 'id' => $ad->id,
                 'title' => $ad->title,
                 'description' => $ad->description,
-                'image_url' => $ad->image_url,
+                'image_url' => $imageUrl,
                 'destination_url' => $ad->destination_url,
                 'format' => $ad->ad_format,
-                'click_url' => url("/api/track/click/{$ad->id}"),
+                'click_url' => "/api/track/click/{$ad->id}",
             ],
             'unit_id' => $adUnit->id,
         ]);
