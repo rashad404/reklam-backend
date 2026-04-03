@@ -45,9 +45,10 @@ class AdController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Unauthorized'], 403);
         }
 
-        $ad = $campaign->ads()->create($request->only([
-            'title', 'description', 'image_url', 'destination_url', 'ad_format',
-        ]));
+        $ad = $campaign->ads()->create(array_merge(
+            $request->only(['title', 'description', 'image_url', 'destination_url', 'ad_format']),
+            ['status' => 'approved']
+        ));
 
         return response()->json([
             'status' => 'success',

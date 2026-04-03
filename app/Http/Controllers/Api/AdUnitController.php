@@ -100,7 +100,7 @@ class AdUnitController extends Controller
 
         $format = str_replace('banner_', '', $adUnit->ad_format);
         $code = '<div id="reklam-ad" data-unit="' . $adUnit->id . '" data-format="' . $format . '"></div>' . "\n"
-            . '<script src="https://reklam.biz/serve.js"></script>';
+            . '<script async src="https://reklam.biz/serve.js"></script>';
 
         return response()->json([
             'status' => 'success',

@@ -8,9 +8,30 @@ use App\Models\AdUnit;
 use App\Models\Click;
 use App\Models\Impression;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 class ServeController extends Controller
 {
+    // Time windows
+    private const IMPRESSION_WINDOW = 1800;   // 30 min - same visitor sees same ad on same unit
+    private const CLICK_WINDOW = 7200;        // 2 hours - same visitor clicks same ad
+    private const IP_CLICK_WINDOW = 3600;     // 1 hour - same IP+UA clicks same ad (backup dedup)
+    private const CLICK_RATE_WINDOW = 60;     // 1 min
+    private const CLICK_RATE_LIMIT = 5;       // max 5 clicks per min per IP
+    private const IMPRESSION_RATE_WINDOW = 60;
+    private const IMPRESSION_RATE_LIMIT = 30;
+
+    // Signed visitor ID: alphabet used in generation (no 8, no E, no e)
+    private const SAFE_CHARS = 'abcdfghijlmnopqrstuvwxyz012345679';
+
+    private const BOT_PATTERNS = [
+        'bot', 'crawler', 'spider', 'slurp', 'mediapartners',
+        'curl', 'wget', 'python', 'java/', 'php/', 'go-http',
+        'headless', 'phantom', 'selenium', 'puppeteer', 'playwright',
+        'lighthouse', 'pagespeed', 'gtmetrix', 'pingdom',
+    ];
+
     public function serve(Request $request)
     {
         $request->validate([
@@ -26,8 +47,7 @@ class ServeController extends Controller
             return response()->json(['ad' => null], 200);
         }
 
-        // Find a matching active ad
-        $ad = Ad::where('status', 'approved')
+        $ads = Ad::where('status', 'approved')
             ->where('ad_format', $adUnit->ad_format)
             ->whereHas('campaign', function ($q) {
                 $q->where('status', 'active')
@@ -42,12 +62,14 @@ class ServeController extends Controller
                     ->whereColumn('spent', '<', 'budget');
             })
             ->with('campaign:id,advertiser_id,cpc_bid,cpm_bid')
-            ->inRandomOrder()
-            ->first();
+            ->get();
 
-        if (!$ad) {
+        if ($ads->isEmpty()) {
             return response()->json(['ad' => null], 200);
         }
+
+        // Weighted random selection: higher bid = shown more often
+        $ad = $this->selectByWeight($ads);
 
         return response()->json([
             'ad' => [
@@ -70,28 +92,77 @@ class ServeController extends Controller
             'unit_id' => 'required|exists:ad_units,id',
         ]);
 
-        $ad = Ad::with('campaign')->find($request->ad_id);
+        $ip = $this->getClientIp($request);
+        $ua = $request->userAgent() ?? '';
+        $vid = $request->input('vid', '');
+        $sid = $request->input('sid', '');
+
+        // 1. Bot check
+        if ($this->isBot($ua)) {
+            return response()->json(['status' => 'ok']);
+        }
+
+        // 2. Validate visitor ID signature
+        if (!$this->isValidVid($vid)) {
+            Log::info('Impression rejected: invalid vid', ['vid' => $vid, 'ip' => $ip]);
+            return response()->json(['status' => 'ok']);
+        }
+
+        // 3. Rate limit per IP
+        $rateKey = "imp_rate:{$ip}";
+        $rateCount = Cache::get($rateKey, 0);
+        if ($rateCount >= self::IMPRESSION_RATE_LIMIT) {
+            return response()->json(['status' => 'ok']);
+        }
+        Cache::put($rateKey, $rateCount + 1, self::IMPRESSION_RATE_WINDOW);
+
+        // 4. Primary dedup: vid + ad + unit (browser-level unique visitor)
+        $dedupKey = "imp:{$vid}:{$request->ad_id}:{$request->unit_id}";
+        if (Cache::has($dedupKey)) {
+            return response()->json(['status' => 'ok']);
+        }
+        Cache::put($dedupKey, true, self::IMPRESSION_WINDOW);
+
+        // 5. Secondary dedup: IP + UA hash + ad + unit (catches cleared localStorage)
+        $uaHash = substr(md5($ua), 0, 8);
+        $ipDedupKey = "imp_ip:{$ip}:{$uaHash}:{$request->ad_id}:{$request->unit_id}";
+        if (Cache::has($ipDedupKey)) {
+            return response()->json(['status' => 'ok']);
+        }
+        Cache::put($ipDedupKey, true, self::IMPRESSION_WINDOW);
+
+        $ad = Ad::with('campaign.advertiser')->find($request->ad_id);
         $adUnit = AdUnit::find($request->unit_id);
 
         if (!$ad || !$adUnit) {
             return response()->json(['status' => 'error'], 400);
         }
 
+        // 6. Referrer check
+        $referrer = $request->header('Referer', '');
+        if (!$this->isReferrerValid($referrer, $adUnit->website_url)) {
+            Log::info('Impression referrer mismatch', ['referrer' => $referrer, 'unit' => $adUnit->website_url, 'ip' => $ip]);
+            return response()->json(['status' => 'ok']);
+        }
+
+        // Record impression
         Impression::create([
             'ad_id' => $ad->id,
             'ad_unit_id' => $adUnit->id,
             'campaign_id' => $ad->campaign_id,
             'advertiser_id' => $ad->campaign->advertiser_id,
             'publisher_id' => $adUnit->publisher_id,
-            'ip' => $request->ip(),
-            'user_agent' => $request->userAgent(),
+            'ip' => $ip,
+            'user_agent' => substr($ua, 0, 255),
         ]);
 
-        // Charge CPM if applicable
-        if ($ad->campaign->cpm_bid) {
+        // Charge CPM
+        if ($ad->campaign->cpm_bid && $ad->campaign->advertiser) {
             $cost = $ad->campaign->cpm_bid / 1000;
-            $ad->campaign->increment('spent', $cost);
-            $ad->campaign->advertiser->decrement('balance', $cost);
+            if ($ad->campaign->advertiser->balance >= $cost) {
+                $ad->campaign->increment('spent', $cost);
+                $ad->campaign->advertiser->decrement('balance', $cost);
+            }
         }
 
         return response()->json(['status' => 'ok']);
@@ -105,33 +176,225 @@ class ServeController extends Controller
             return redirect('/');
         }
 
-        // Try to find the ad unit from referrer or query
+        $ip = $this->getClientIp($request);
+        $ua = $request->userAgent() ?? '';
+        $vid = $request->query('vid', '');
         $unitId = $request->query('unit');
         $adUnit = $unitId ? AdUnit::find($unitId) : null;
 
+        // 1. Bot check
+        if ($this->isBot($ua)) {
+            return redirect($ad->destination_url);
+        }
+
+        // 2. Validate visitor ID signature
+        if (!$this->isValidVid($vid)) {
+            Log::info('Click rejected: invalid vid', ['vid' => $vid, 'ip' => $ip, 'ad' => $adId]);
+            return redirect($ad->destination_url);
+        }
+
+        // 3. Rate limit per IP
+        $rateKey = "click_rate:{$ip}";
+        $rateCount = Cache::get($rateKey, 0);
+        if ($rateCount >= self::CLICK_RATE_LIMIT) {
+            return redirect($ad->destination_url);
+        }
+        Cache::put($rateKey, $rateCount + 1, self::CLICK_RATE_WINDOW);
+
+        // 4. Primary dedup: vid + ad (browser-level)
+        $dedupKey = "click:{$vid}:{$adId}";
+        if (Cache::has($dedupKey)) {
+            return redirect($ad->destination_url);
+        }
+        Cache::put($dedupKey, true, self::CLICK_WINDOW);
+
+        // 5. Secondary dedup: IP + UA hash + ad (catches cleared localStorage)
+        $uaHash = substr(md5($ua), 0, 8);
+        $ipDedupKey = "click_ip:{$ip}:{$uaHash}:{$adId}";
+        if (Cache::has($ipDedupKey)) {
+            return redirect($ad->destination_url);
+        }
+        Cache::put($ipDedupKey, true, self::IP_CLICK_WINDOW);
+
+        // 6. Referrer check
+        if ($adUnit) {
+            $referrer = $request->header('Referer', '');
+            if (!$this->isReferrerValid($referrer, $adUnit->website_url)) {
+                Log::info('Click referrer mismatch', ['referrer' => $referrer, 'unit' => $adUnit->website_url, 'ip' => $ip]);
+                return redirect($ad->destination_url);
+            }
+        }
+
+        // Record click
         Click::create([
             'ad_id' => $ad->id,
             'ad_unit_id' => $adUnit?->id ?? 0,
             'campaign_id' => $ad->campaign_id,
             'advertiser_id' => $ad->campaign->advertiser_id,
             'publisher_id' => $adUnit?->publisher_id ?? 0,
-            'ip' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-            'referrer' => $request->header('Referer'),
+            'ip' => $ip,
+            'user_agent' => substr($ua, 0, 255),
+            'referrer' => substr($request->header('Referer', ''), 0, 255),
         ]);
 
         // Charge CPC
-        if ($ad->campaign->cpc_bid) {
+        if ($ad->campaign->cpc_bid && $ad->campaign->advertiser) {
             $cost = $ad->campaign->cpc_bid;
-            $ad->campaign->increment('spent', $cost);
-            $ad->campaign->advertiser->decrement('balance', $cost);
-
-            // Publisher earning (70%)
-            $commission = config('app.platform_commission', 0.30);
-            $earning = $cost * (1 - $commission);
-            // TODO: Credit publisher balance
+            if ($ad->campaign->advertiser->balance >= $cost) {
+                $ad->campaign->increment('spent', $cost);
+                $ad->campaign->advertiser->decrement('balance', $cost);
+            }
         }
 
         return redirect($ad->destination_url);
+    }
+
+    /**
+     * Weighted random: higher bid = shown more, but never 0% for low bidders
+     */
+    private function selectByWeight($ads)
+    {
+        if ($ads->count() === 1) {
+            return $ads->first();
+        }
+
+        $weights = [];
+        foreach ($ads as $ad) {
+            $bid = max((float) ($ad->campaign->cpc_bid ?? 0), (float) ($ad->campaign->cpm_bid ?? 0));
+            // Minimum weight of 1 so every ad has a chance
+            $weights[] = max($bid * 100, 1);
+        }
+
+        $totalWeight = array_sum($weights);
+        $random = mt_rand(1, (int) $totalWeight);
+
+        $cumulative = 0;
+        foreach ($ads as $i => $ad) {
+            $cumulative += $weights[$i];
+            if ($random <= $cumulative) {
+                return $ad;
+            }
+        }
+
+        return $ads->last();
+    }
+
+    /**
+     * Validate the signed visitor ID from serve.js
+     *
+     * Rules:
+     * - Exactly 16 characters
+     * - Position 1 must be 'k'
+     * - Position 7 must be 'z'
+     * - Must not contain '8', 'E', or 'e'
+     * - Last 2 chars must be valid checksum of positions 3-12
+     * - All chars must be from SAFE_CHARS alphabet
+     */
+    private function isValidVid(string $vid): bool
+    {
+        if (strlen($vid) !== 16) {
+            return false;
+        }
+
+        // Signature positions
+        if ($vid[1] !== 'k' || $vid[7] !== 'z') {
+            return false;
+        }
+
+        // Forbidden characters
+        if (strpbrk($vid, '8Ee') !== false) {
+            return false;
+        }
+
+        // All non-signature chars must be in safe alphabet
+        for ($i = 0; $i < 16; $i++) {
+            if ($i === 1 || $i === 7) continue; // signature positions
+            if (strpos(self::SAFE_CHARS, $vid[$i]) === false) {
+                return false;
+            }
+        }
+
+        // Checksum validation: last 2 chars = checksum of positions 3-12
+        $middle = substr($vid, 3, 10);
+        $expected = $this->checksum($middle);
+        $actual = substr($vid, 14, 2);
+
+        if ($expected !== $actual) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Same checksum algorithm as serve.js
+     */
+    private function checksum(string $str): string
+    {
+        $sum = 0;
+        for ($i = 0; $i < strlen($str); $i++) {
+            $sum = (($sum << 3) - $sum + ord($str[$i])) & 0xffff;
+        }
+        $chars = self::SAFE_CHARS;
+        return $chars[$sum % strlen($chars)] . $chars[($sum >> 5) % strlen($chars)];
+    }
+
+    /**
+     * Check if referrer matches publisher's website (allows empty referrer)
+     */
+    private function isReferrerValid(string $referrer, string $unitUrl): bool
+    {
+        if (empty($referrer)) {
+            return true;
+        }
+
+        $referrerHost = parse_url($referrer, PHP_URL_HOST) ?? '';
+        $unitHost = parse_url($unitUrl, PHP_URL_HOST) ?? '';
+
+        if (empty($unitHost)) {
+            return true;
+        }
+
+        // Strip www for comparison
+        $referrerHost = preg_replace('/^www\./', '', $referrerHost);
+        $unitHost = preg_replace('/^www\./', '', $unitHost);
+
+        return str_contains($referrerHost, $unitHost) || str_contains($unitHost, $referrerHost);
+    }
+
+    /**
+     * Get real client IP behind proxies/CDN
+     */
+    private function getClientIp(Request $request): string
+    {
+        if ($request->header('CF-Connecting-IP')) {
+            return $request->header('CF-Connecting-IP');
+        }
+
+        $forwarded = $request->header('X-Forwarded-For');
+        if ($forwarded) {
+            return trim(explode(',', $forwarded)[0]);
+        }
+
+        return $request->ip() ?? '0.0.0.0';
+    }
+
+    /**
+     * Check if user agent looks like a bot
+     */
+    private function isBot(string $ua): bool
+    {
+        if (empty($ua) || strlen($ua) < 20) {
+            return true;
+        }
+
+        $uaLower = strtolower($ua);
+        foreach (self::BOT_PATTERNS as $pattern) {
+            if (str_contains($uaLower, $pattern)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
