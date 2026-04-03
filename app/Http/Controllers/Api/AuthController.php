@@ -99,17 +99,14 @@ class AuthController extends Controller
 
             $tokens = $tokenResponse->json();
 
-            Log::info('Wallet OAuth token response', [
-                'status' => $tokenResponse->status(),
-                'body' => substr($tokenResponse->body(), 0, 500),
-                'has_access_token' => isset($tokens['access_token']),
-            ]);
-
             if (empty($tokens['access_token'])) {
+                Log::error('Wallet OAuth: no access token', [
+                    'status' => $tokenResponse->status(),
+                    'error' => $tokens['error'] ?? $tokens['message'] ?? 'unknown',
+                ]);
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'No access token in response',
-                    'debug' => $tokens['error'] ?? $tokens['message'] ?? 'Unknown error from Kimlik.az',
+                    'message' => 'Failed to get access token',
                 ], 400);
             }
 
