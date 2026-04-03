@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\CampaignController;
 use App\Http\Controllers\Api\PublisherController;
 use App\Http\Controllers\Api\BannerGeneratorController;
 use App\Http\Controllers\Api\ServeController;
+use App\Http\Controllers\Api\StatsController;
 use App\Http\Controllers\Api\UploadController;
 use Illuminate\Support\Facades\Route;
 
@@ -49,6 +50,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/ads', [AdController::class, 'store']);
     Route::put('/ads/{ad}', [AdController::class, 'update']);
     Route::delete('/ads/{ad}', [AdController::class, 'destroy']);
+
+    // Stats
+    Route::get('/stats/advertiser', [StatsController::class, 'advertiserOverview']);
+    Route::get('/stats/campaign/{campaignId}', [StatsController::class, 'campaignStats']);
+    Route::get('/stats/publisher', [StatsController::class, 'publisherOverview']);
+    Route::get('/stats/ad-unit/{adUnitId}', [StatsController::class, 'adUnitStats']);
 
     /*
     |--------------------------------------------------------------------------

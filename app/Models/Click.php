@@ -11,7 +11,7 @@ class Click extends Model
     protected $fillable = [
         'impression_id', 'ad_id', 'ad_unit_id', 'campaign_id',
         'advertiser_id', 'publisher_id', 'ip', 'user_agent',
-        'referrer', 'country',
+        'referrer', 'country', 'device_type', 'browser', 'os',
     ];
 
     public function ad()

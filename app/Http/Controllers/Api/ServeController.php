@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Helpers\TrackingHelper;
 use App\Http\Controllers\Controller;
 use App\Models\Ad;
 use App\Models\AdUnit;
@@ -154,7 +155,10 @@ class ServeController extends Controller
             return response()->json(['status' => 'ok']);
         }
 
-        // Record impression
+        // Record impression with device/browser/country
+        $parsed = TrackingHelper::parseUserAgent($ua);
+        $country = TrackingHelper::getCountryFromIp($ip);
+
         Impression::create([
             'ad_id' => $ad->id,
             'ad_unit_id' => $adUnit->id,
@@ -163,6 +167,10 @@ class ServeController extends Controller
             'publisher_id' => $adUnit->publisher_id,
             'ip' => $ip,
             'user_agent' => substr($ua, 0, 255),
+            'country' => $country,
+            'device_type' => $parsed['device_type'],
+            'browser' => $parsed['browser'],
+            'os' => $parsed['os'],
         ]);
 
         // Charge CPM
@@ -234,7 +242,10 @@ class ServeController extends Controller
             }
         }
 
-        // Record click
+        // Record click with device/browser/country
+        $parsed = TrackingHelper::parseUserAgent($ua);
+        $country = TrackingHelper::getCountryFromIp($ip);
+
         Click::create([
             'ad_id' => $ad->id,
             'ad_unit_id' => $adUnit?->id ?? 0,
@@ -244,6 +255,10 @@ class ServeController extends Controller
             'ip' => $ip,
             'user_agent' => substr($ua, 0, 255),
             'referrer' => substr($request->header('Referer', ''), 0, 255),
+            'country' => $country,
+            'device_type' => $parsed['device_type'],
+            'browser' => $parsed['browser'],
+            'os' => $parsed['os'],
         ]);
 
         // Charge CPC
