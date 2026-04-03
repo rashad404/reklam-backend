@@ -74,6 +74,7 @@
     return sid;
   }
 
+  function initAds() {
   var vid = getVisitorId();
   var sid = getSessionId();
 
@@ -128,10 +129,10 @@
             + badge
             + '</div>';
         } else {
-          html = '<div style="position:relative;padding:12px;border:1px solid #eee;border-radius:8px;font-family:sans-serif;">'
-            + '<a href="' + clickUrl + '" target="_blank" rel="noopener" style="text-decoration:none;color:#333;">'
-            + '<div style="font-weight:600;font-size:14px;margin-bottom:4px;">' + escapeHtml(ad.title) + '</div>'
-            + (ad.description ? '<div style="font-size:12px;color:#666;">' + escapeHtml(ad.description) + '</div>' : '')
+          html = '<div style="position:relative;padding:10px 12px;background:#fff;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 1px 4px rgba(0,0,0,0.08);">'
+            + '<a href="' + clickUrl + '" target="_blank" rel="noopener" style="text-decoration:none;color:#1f2937;display:block;">'
+            + '<div style="font-weight:700;font-size:13px;line-height:1.3;margin-bottom:3px;">' + escapeHtml(ad.title) + '</div>'
+            + (ad.description ? '<div style="font-size:11px;color:#6b7280;line-height:1.4;">' + escapeHtml(ad.description) + '</div>' : '')
             + '</a>'
             + badge
             + '</div>';
@@ -160,5 +161,13 @@
     var div = document.createElement('div');
     div.appendChild(document.createTextNode(text));
     return div.innerHTML;
+  }
+  } // end initAds
+
+  // Run when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAds);
+  } else {
+    initAds();
   }
 })();

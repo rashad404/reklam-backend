@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\AdvertiserController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CampaignController;
 use App\Http\Controllers\Api\PublisherController;
+use App\Http\Controllers\Api\BannerGeneratorController;
 use App\Http\Controllers\Api\ServeController;
 use App\Http\Controllers\Api\UploadController;
 use Illuminate\Support\Facades\Route;
@@ -24,8 +25,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/user', [AuthController::class, 'user']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
 
-    // Upload
+    // Upload & Generate
     Route::post('/upload/image', [UploadController::class, 'image']);
+    Route::post('/generate/banner', [BannerGeneratorController::class, 'generate']);
 
     /*
     |--------------------------------------------------------------------------
