@@ -173,12 +173,20 @@ class ServeController extends Controller
             'os' => $parsed['os'],
         ]);
 
-        // Charge CPM
+        // Charge CPM and credit publisher
         if ($ad->campaign->cpm_bid && $ad->campaign->advertiser) {
             $cost = $ad->campaign->cpm_bid / 1000;
             if ($ad->campaign->advertiser->balance >= $cost) {
                 $ad->campaign->increment('spent', $cost);
                 $ad->campaign->advertiser->decrement('balance', $cost);
+
+                $commission = (float) env('PLATFORM_COMMISSION', 0.30);
+                $earning = round($cost * (1 - $commission), 4);
+                $publisher = $adUnit->publisher;
+                if ($publisher) {
+                    $publisher->increment('balance', $earning);
+                    $publisher->increment('total_earned', $earning);
+                }
             }
         }
 
@@ -261,12 +269,20 @@ class ServeController extends Controller
             'os' => $parsed['os'],
         ]);
 
-        // Charge CPC
+        // Charge CPC and credit publisher
         if ($ad->campaign->cpc_bid && $ad->campaign->advertiser) {
             $cost = $ad->campaign->cpc_bid;
             if ($ad->campaign->advertiser->balance >= $cost) {
                 $ad->campaign->increment('spent', $cost);
                 $ad->campaign->advertiser->decrement('balance', $cost);
+
+                $commission = (float) env('PLATFORM_COMMISSION', 0.30);
+                $earning = round($cost * (1 - $commission), 4);
+                $publisher = $adUnit ? $adUnit->publisher : null;
+                if ($publisher) {
+                    $publisher->increment('balance', $earning);
+                    $publisher->increment('total_earned', $earning);
+                }
             }
         }
 

@@ -16,12 +16,9 @@ class PublisherController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Not a publisher'], 403);
         }
 
-        $adUnitIds = $publisher->adUnits()->pluck('id');
-
         $stats = [
-            'total_earned' => $publisher->adUnits()
-                ->join('daily_stats', 'ad_units.id', '=', 'daily_stats.ad_unit_id')
-                ->sum('daily_stats.earned'),
+            'balance' => $publisher->balance,
+            'total_earned' => $publisher->total_earned,
             'impressions' => $publisher->adUnits()
                 ->withCount('impressions')->get()->sum('impressions_count'),
             'clicks' => $publisher->adUnits()
