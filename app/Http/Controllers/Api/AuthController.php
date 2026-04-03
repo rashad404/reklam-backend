@@ -182,6 +182,42 @@ class AuthController extends Controller
         ]);
     }
 
+    public function syncFromWallet(Request $request)
+    {
+        $user = $request->user();
+
+        if (!$user->wallet_id || !$user->wallet_access_token) {
+            return response()->json(['status' => 'error', 'message' => 'No wallet connected'], 400);
+        }
+
+        try {
+            $walletApiUrl = env('WALLET_API_URL', 'https://api.kimlik.az/api');
+
+            $userResponse = Http::withToken($user->wallet_access_token)
+                ->get("{$walletApiUrl}/oauth/user");
+
+            if (!$userResponse->successful()) {
+                return response()->json(['status' => 'error', 'message' => 'Failed to fetch from Kimlik.az'], 400);
+            }
+
+            $walletUser = $userResponse->json()['data'];
+
+            $user->update([
+                'name' => $walletUser['name'] ?? $user->name,
+                'phone' => $walletUser['phone'] ?? $user->phone,
+                'avatar' => $walletUser['avatar'] ?? $user->avatar,
+            ]);
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $user->fresh()->load(['advertiser', 'publisher']),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Wallet sync error', ['message' => $e->getMessage()]);
+            return response()->json(['status' => 'error', 'message' => 'Sync failed'], 500);
+        }
+    }
+
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();

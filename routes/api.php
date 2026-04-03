@@ -24,6 +24,7 @@ Route::post('/auth/wallet/callback', [AuthController::class, 'walletCallback']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/user', [AuthController::class, 'user']);
+    Route::post('/auth/sync-from-wallet', [AuthController::class, 'syncFromWallet']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
 
     // Upload & Generate
