@@ -134,15 +134,13 @@
         var hasText = ad.description && ad.description.length > 1;
 
         if (hasImage && hasText) {
-          // Rich card: image thumbnail + title + description (native style)
+          // Rich card: full image on top + title & description below
           html = '<div style="position:relative;background:#fff;border-radius:10px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 1px 6px rgba(0,0,0,0.08);overflow:hidden;">'
-            + '<a href="' + clickUrl + '" target="_blank" rel="noopener" style="text-decoration:none;color:#1f2937;display:flex;align-items:center;gap:12px;padding:10px 12px;">'
-            + '<div style="width:72px;height:72px;border-radius:8px;overflow:hidden;flex-shrink:0;background:#f3f4f6;display:flex;align-items:center;justify-content:center;">'
-            + '<img src="' + ad.image_url + '" alt="' + escapeHtml(ad.title) + '" style="width:100%;height:100%;object-fit:cover;" />'
-            + '</div>'
-            + '<div style="flex:1;min-width:0;">'
-            + '<div style="font-weight:700;font-size:14px;line-height:1.3;color:#1f2937;margin-bottom:3px;">' + escapeHtml(ad.title) + '</div>'
-            + '<div style="font-size:12px;color:#6b7280;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">' + escapeHtml(ad.description) + '</div>'
+            + '<a href="' + clickUrl + '" target="_blank" rel="noopener" style="text-decoration:none;color:#1f2937;display:block;">'
+            + '<div style="line-height:0;"><img src="' + ad.image_url + '" alt="' + escapeHtml(ad.title) + '" style="width:100%;height:auto;display:block;" /></div>'
+            + '<div style="padding:10px 12px;">'
+            + '<div style="font-weight:700;font-size:14px;line-height:1.3;color:#1f2937;margin-bottom:2px;">' + escapeHtml(ad.title) + '</div>'
+            + '<div style="font-size:12px;color:#6b7280;line-height:1.4;">' + escapeHtml(ad.description) + '</div>'
             + '</div>'
             + '</a>'
             + badge
