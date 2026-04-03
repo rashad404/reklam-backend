@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -70,84 +71,94 @@ class AuthController extends Controller
             'redirect_uri' => 'required|string',
         ]);
 
-        $walletApiUrl = config('services.wallet.api_url', env('WALLET_API_URL'));
-        $clientId = config('services.wallet.client_id', env('WALLET_CLIENT_ID'));
-        $clientSecret = config('services.wallet.client_secret', env('WALLET_CLIENT_SECRET'));
+        try {
+            $walletApiUrl = env('WALLET_API_URL', 'https://api.kimlik.az/api');
+            $clientId = env('WALLET_CLIENT_ID');
+            $clientSecret = env('WALLET_CLIENT_SECRET');
 
-        // Exchange code for tokens with Kimlik.az
-        $tokenResponse = Http::post("{$walletApiUrl}/oauth/token", [
-            'grant_type' => 'authorization_code',
-            'client_id' => $clientId,
-            'client_secret' => $clientSecret,
-            'code' => $request->code,
-            'code_verifier' => $request->code_verifier,
-            'redirect_uri' => $request->redirect_uri,
-        ]);
-
-        if (!$tokenResponse->successful()) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Failed to exchange authorization code',
-            ], 400);
-        }
-
-        $tokens = $tokenResponse->json();
-        $accessToken = $tokens['access_token'] ?? null;
-
-        if (!$accessToken) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'No access token received',
-            ], 400);
-        }
-
-        // Get user profile from Kimlik.az
-        $profileResponse = Http::withToken($accessToken)->get("{$walletApiUrl}/user");
-
-        if (!$profileResponse->successful()) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Failed to get user profile',
-            ], 400);
-        }
-
-        $profile = $profileResponse->json('data', $profileResponse->json());
-
-        // Find or create user
-        $user = User::where('wallet_id', $profile['id'])->first();
-
-        if (!$user) {
-            $user = User::where('email', $profile['email'] ?? '')->first();
-        }
-
-        if ($user) {
-            $user->update([
-                'wallet_id' => $profile['id'],
-                'wallet_access_token' => $accessToken,
-                'wallet_refresh_token' => $tokens['refresh_token'] ?? null,
-                'name' => $profile['name'] ?? $user->name,
-                'phone' => $profile['phone'] ?? $user->phone,
+            // Exchange authorization code for tokens
+            $tokenResponse = Http::post("{$walletApiUrl}/oauth/token", [
+                'grant_type' => 'authorization_code',
+                'client_id' => $clientId,
+                'client_secret' => $clientSecret,
+                'code' => $request->code,
+                'redirect_uri' => $request->redirect_uri,
+                'code_verifier' => $request->code_verifier,
             ]);
-        } else {
-            $user = User::create([
-                'name' => $profile['name'] ?? 'User',
-                'email' => $profile['email'] ?? $profile['id'] . '@wallet.user',
-                'phone' => $profile['phone'] ?? null,
-                'wallet_id' => $profile['id'],
-                'wallet_access_token' => $accessToken,
-                'wallet_refresh_token' => $tokens['refresh_token'] ?? null,
+
+            if (!$tokenResponse->successful()) {
+                Log::error('Wallet OAuth token exchange failed', [
+                    'status' => $tokenResponse->status(),
+                    'body' => $tokenResponse->body(),
+                ]);
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Failed to exchange authorization code',
+                ], 400);
+            }
+
+            $tokens = $tokenResponse->json();
+
+            // Fetch user data from Kimlik.az
+            $userResponse = Http::withToken($tokens['access_token'])
+                ->get("{$walletApiUrl}/oauth/user");
+
+            if (!$userResponse->successful()) {
+                Log::error('Wallet OAuth user fetch failed', [
+                    'status' => $userResponse->status(),
+                    'body' => $userResponse->body(),
+                ]);
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Failed to fetch user data',
+                ], 400);
+            }
+
+            $walletUser = $userResponse->json()['data'];
+
+            // Find or create user
+            $user = User::where('wallet_id', $walletUser['id'])
+                ->orWhere('email', $walletUser['email'])
+                ->first();
+
+            if ($user) {
+                $user->update([
+                    'wallet_id' => $walletUser['id'],
+                    'wallet_access_token' => $tokens['access_token'],
+                    'wallet_refresh_token' => $tokens['refresh_token'] ?? null,
+                    'name' => $walletUser['name'],
+                    'phone' => $walletUser['phone'] ?? $user->phone,
+                ]);
+            } else {
+                $user = User::create([
+                    'name' => $walletUser['name'],
+                    'email' => $walletUser['email'] ?? $walletUser['id'] . '@wallet.user',
+                    'phone' => $walletUser['phone'] ?? null,
+                    'wallet_id' => $walletUser['id'],
+                    'wallet_access_token' => $tokens['access_token'],
+                    'wallet_refresh_token' => $tokens['refresh_token'] ?? null,
+                ]);
+            }
+
+            $token = $user->createToken('wallet-auth')->plainTextToken;
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'user' => $user,
+                    'token' => $token,
+                ],
             ]);
+        } catch (\Exception $e) {
+            Log::error('Wallet OAuth error', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Authentication failed: ' . $e->getMessage(),
+            ], 500);
         }
-
-        $token = $user->createToken('wallet-auth')->plainTextToken;
-
-        return response()->json([
-            'status' => 'success',
-            'data' => [
-                'user' => $user,
-                'token' => $token,
-            ],
-        ]);
     }
 
     public function user(Request $request)

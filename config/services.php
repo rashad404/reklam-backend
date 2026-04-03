@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    'wallet' => [
+        'api_url' => env('WALLET_API_URL', 'https://api.kimlik.az/api'),
+        'client_id' => env('WALLET_CLIENT_ID'),
+        'client_secret' => env('WALLET_CLIENT_SECRET'),
+        'webhook_secret' => env('WALLET_WEBHOOK_SECRET'),
+    ],
+
 ];
