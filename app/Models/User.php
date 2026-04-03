@@ -16,6 +16,7 @@ class User extends Authenticatable
         'email',
         'password',
         'phone',
+        'avatar',
         'wallet_id',
         'wallet_access_token',
         'wallet_refresh_token',

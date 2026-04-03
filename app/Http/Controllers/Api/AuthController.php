@@ -139,12 +139,14 @@ class AuthController extends Controller
                     'wallet_refresh_token' => $tokens['refresh_token'] ?? null,
                     'name' => $walletUser['name'],
                     'phone' => $walletUser['phone'] ?? $user->phone,
+                    'avatar' => $walletUser['avatar'] ?? $user->avatar,
                 ]);
             } else {
                 $user = User::create([
                     'name' => $walletUser['name'],
                     'email' => $walletUser['email'] ?? $walletUser['id'] . '@wallet.user',
                     'phone' => $walletUser['phone'] ?? null,
+                    'avatar' => $walletUser['avatar'] ?? null,
                     'wallet_id' => $walletUser['id'],
                     'wallet_access_token' => $tokens['access_token'],
                     'wallet_refresh_token' => $tokens['refresh_token'] ?? null,
