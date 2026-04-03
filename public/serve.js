@@ -130,7 +130,26 @@
           + '</style>';
 
         var html = '';
-        if (ad.image_url) {
+        var hasImage = ad.image_url && ad.image_url.length > 1;
+        var hasText = ad.description && ad.description.length > 1;
+
+        if (hasImage && hasText) {
+          // Rich card: image thumbnail + title + description (native style)
+          html = '<div style="position:relative;background:#fff;border-radius:10px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 1px 6px rgba(0,0,0,0.08);overflow:hidden;">'
+            + '<div style="padding:3px 10px 0;"><span style="display:inline-block;font-size:9px;font-weight:600;color:#FF3131;background:#FFF1F1;padding:2px 8px;border-radius:4px;letter-spacing:0.3px;">Reklam</span></div>'
+            + '<a href="' + clickUrl + '" target="_blank" rel="noopener" style="text-decoration:none;color:#1f2937;display:flex;align-items:center;gap:12px;padding:8px 12px 10px;">'
+            + '<div style="width:72px;height:72px;border-radius:8px;overflow:hidden;flex-shrink:0;background:#f3f4f6;display:flex;align-items:center;justify-content:center;">'
+            + '<img src="' + ad.image_url + '" alt="' + escapeHtml(ad.title) + '" style="width:100%;height:100%;object-fit:cover;" />'
+            + '</div>'
+            + '<div style="flex:1;min-width:0;">'
+            + '<div style="font-weight:700;font-size:14px;line-height:1.3;color:#1f2937;margin-bottom:3px;">' + escapeHtml(ad.title) + '</div>'
+            + '<div style="font-size:12px;color:#6b7280;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">' + escapeHtml(ad.description) + '</div>'
+            + '</div>'
+            + '</a>'
+            + badge
+            + '</div>';
+        } else if (hasImage) {
+          // Full image banner
           html = '<div style="position:relative;display:inline-block;line-height:0;">'
             + '<a href="' + clickUrl + '" target="_blank" rel="noopener" style="display:inline-block;text-decoration:none;">'
             + '<img src="' + ad.image_url + '" alt="' + escapeHtml(ad.title) + '" style="max-width:100%;height:auto;border:0;" />'
@@ -138,6 +157,7 @@
             + badge
             + '</div>';
         } else {
+          // Text only
           html = '<div style="position:relative;padding:10px 12px;background:#fff;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 1px 4px rgba(0,0,0,0.08);">'
             + '<a href="' + clickUrl + '" target="_blank" rel="noopener" style="text-decoration:none;color:#1f2937;display:block;">'
             + '<div style="font-weight:700;font-size:13px;line-height:1.3;margin-bottom:3px;">' + escapeHtml(ad.title) + '</div>'
