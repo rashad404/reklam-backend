@@ -77,3 +77,10 @@ Public marketing copy is deployed as frontend `20260913-marketing`, source commi
 Specificity revision: frontend release `20260913-editorial`, source commit `7bd3360`, applies the azdoc research to public copy and composition. It replaces repeated feature/step blocks with audience-specific content and native FAQs. The prior `20260913-marketing` release is retained for rollback. Backend remains v4 with the Kimlik fix. Evidence: audits/2026-09-12-specific-design.md.
 
 Gallery attribution fix: frontend release `20260913-ad-label`, source `3668c0c`, moves the public gallery's label below the creative. Prior `20260913-editorial` release is retained for rollback. Backend and publisher embeds are unchanged.
+
+
+Publisher offer release: API public symlink and frontend PM2 now use `20260913-publisher-offer`, backend source `6748889`, frontend source `138a667`. Shared storage remains `/home/ugn/api.reklam.biz/storage`. Scheduler/monitor still use v4, intentionally. Publisher-row backup: `/home/ugn/reklam-backups/20260913-publisher-offer/publishers-before.json` (private).
+
+Before API cutover, remove group/other write permissions on the new backend public directory; cPanel's PHP handler rejects group-writable index.php. Probe the unauthenticated auth/user endpoint for 401 immediately after cutover and run the product monitor before publishing dependent frontend changes.
+
+Retain publisher offer dates during rollback. Do not run the offer migration's down method or restore old balances. An API rollback to v4 must first carry forward Publisher's offer dates/rate method, the config key and both ServeController commission calls, so existing promised 0% periods remain honored. Frontend-only rollback can use the retained ad-label release.
