@@ -68,3 +68,5 @@ Copy follow-up: frontend release `20260912-v5` removes public rollout/payment di
 
 
 Design rebuild: final frontend release `20260912-v8` uses the new public and account design. Its ecosystem file controls the frontend standalone server. Source commit `b7febd4` includes the full redesign from `9e1315e` plus stable initial rendering and the larger ad attribution target. API, cron and monitoring remain on `20260912-v4`. To roll back only the design, switch the verified Reklam PM2 process to the retained v6 ecosystem file; do not roll back the database.
+
+Kimlik login hotfix: backend commit `28298f4` was applied atomically to the active v4 AuthController after matching its original hash. OAuth credentials must be read through services.wallet configuration, never runtime env(), because production uses config:cache. Backup: `/home/ugn/reklam-backups/20260913-oauth-config/AuthController.php`. Details: audits/2026-09-12-kimlik-login-fix.md. Frontend remains v8.
