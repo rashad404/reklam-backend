@@ -219,9 +219,9 @@ class ServeController extends Controller
                 $ad->campaign->increment('spent', $cost);
                 $ad->campaign->advertiser->decrement('balance', $cost);
 
-                $commission = (float) env('PLATFORM_COMMISSION', 0.30);
-                $earning = round($cost * (1 - $commission), 4);
                 $publisher = $adUnit->publisher;
+                $commission = $publisher?->platformCommissionRate() ?? (float) config('reklam.platform_commission');
+                $earning = round($cost * (1 - $commission), 4);
                 if ($publisher) {
                     $publisher->increment('balance', $earning);
                     $publisher->increment('total_earned', $earning);
@@ -316,9 +316,9 @@ class ServeController extends Controller
                 $ad->campaign->increment('spent', $cost);
                 $ad->campaign->advertiser->decrement('balance', $cost);
 
-                $commission = (float) env('PLATFORM_COMMISSION', 0.30);
-                $earning = round($cost * (1 - $commission), 4);
                 $publisher = $adUnit ? $adUnit->publisher : null;
+                $commission = $publisher?->platformCommissionRate() ?? (float) config('reklam.platform_commission');
+                $earning = round($cost * (1 - $commission), 4);
                 if ($publisher) {
                     $publisher->increment('balance', $earning);
                     $publisher->increment('total_earned', $earning);
