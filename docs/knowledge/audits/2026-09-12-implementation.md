@@ -17,9 +17,9 @@ Status: Implemented and deployed. External account dependencies and verification
 
 ## Local evidence
 
-- Backend: 17 tests / 99 assertions pass, including retry idempotency, cross-account denial, creative removal, verification/moderation, token/replay handling, reporting and aggregation reruns.
+- Backend: 18 tests / 111 assertions pass, including retry idempotency, cross-account denial, creative removal, verification/moderation, token/replay handling, reporting and aggregation reruns.
 - Frontend: production build passes; lint passes without findings after cleanup.
-- Browser: 6 end-to-end checks pass using Chrome and isolated SQLite fixtures. Covers campaign create/reload/edit, publisher placement/code, admin denial and decisions, duplicate independent embeds, public page metadata and language, mobile widths 320/390 and desktop 1440, dark mode and axe accessibility checks.
+- Browser: 7 end-to-end checks pass using Chrome and isolated SQLite fixtures. Covers campaign create/reload/edit, publisher placement/code, admin denial and decisions, duplicate independent embeds, public page metadata and language, mobile widths 320/390 and desktop 1440, dark mode and axe accessibility checks.
 - Desktop Azerbaijani and narrow Russian homepage screenshots inspected. Screenshot and interaction artifacts are under frontend/test-results locally and are not production data.
 - Local browser tests do not prove a real Kimlik.az user's external identity flow. Production initiation and administrator login are checked separately during release.
 
@@ -33,11 +33,11 @@ The existing Google service account has no Reklam.biz Search Console property. A
 
 ## Final release verification
 
-Release path: `/home/ugn/reklam-releases/20260912-v3`. Frontend source: `2b02c0ad6dc64a77eed42a381af54837942bce74`. Backend source: `91cb21b844070ebfb17756bf679b2c1e5ccec10e`. Later documentation-only commits mirror this evidence and do not change application behavior.
+Release path: `/home/ugn/reklam-releases/20260912-v4`. Frontend source: `d22c50287fd7050f33d20b12dfd0fffbe2da07b8`. Backend source: `8b31af79ce3fd39a6070fa07ae57e1270c10cacd`. Later documentation-only commits mirror this evidence and do not change application behavior.
 
 - Next.js 16.3.5, isolated Node 22.23.2 runtime, PHP 8.4, Laravel 13.31.0. Both npm audits and the production Composer audit report zero known advisories at release time.
-- Backend: 17 tests, 99 assertions. Includes end-date-only campaigns, stale aggregation failure detection, and retention preserving historical counts and recent identifiers.
-- All six browser journeys pass against an isolated production frontend build. Live public-page browser checks pass in AZ/EN/RU at 320/390/1440px, plus dark-mode and axe checks.
+- Backend: 18 tests, 111 assertions. Includes end-date-only campaigns, stale aggregation failure detection, and retention preserving historical counts and recent identifiers.
+- All seven browser journeys pass against an isolated production frontend build. Live public-page browser checks pass in AZ/EN/RU at 320/390/1440px, plus dark-mode and axe checks.
 - Live rendered-HTML audit: all 21 sitemap URLs return 200, correct language, self-canonical and AZ/EN/RU/x-default metadata. Three sampled private workspace routes return noindex headers. `/az` redirects to `/` with 308.
 - Live administrator email/password login, overview and both review queues work with no browser console errors. The release administrator is a new dedicated account; no existing account was elevated. Credentials are stored only in the local private workspace file `.private/production-admin.txt`, outside both repositories.
 - Live Kimlik login initiation reaches its English authorization sign-in page. No real end-user identity credentials were available, so a complete external-provider login is not claimed as tested.
@@ -55,3 +55,12 @@ During the remote-history merge, commits `f3e0b5d` (frontend) and `f94b202` (bac
 The available Google service account has no Reklam.biz property and Site Verification returned 403. Search Console ownership, analytics property creation/ingestion and field performance are external account work, not silently marked complete. `www.reklam.biz` has no DNS record at verification time; the canonical apex domain works and the origin redirect is prepared for when that DNS alias is configured. No suitable DNS API credentials were available in the project environment.
 
 Payment implementation, reconciliation and financial correctness certification remain excluded. Existing charge code was not redesigned. Delivery and reporting changes must not be represented as financial certification.
+
+
+## Support completion
+
+A final operational check found no configured support mailbox or MX record for the advertised info address. The release replaces all rendered email contact links with `/settings/support`, including public help, footer and legal pages. Users can submit private, retry-safe requests and see administrator replies. Administrators use `/admin/support` with open/answered/closed queues. Support messages are included in the privacy disclosure. No email delivery or response-time promise is made.
+
+The request-and-reply browser journey passes, as do API tests for ownership isolation, duplicate retries and administrator authorization. The additive support table migration is also rehearsed against a disposable MySQL schema with the production users-table definition before production migration. The earlier full restore rehearsal database was removed after verification; the private backup remains.
+
+Final live administrator/support queues, public browser checks, rendered SEO checks and health monitor passed after the v4 cutover. Lighthouse was rerun on v4 with the same 98/100/100/100 scores. Backend CI for the support commit passed; frontend build and journey CI are checked separately from local evidence.

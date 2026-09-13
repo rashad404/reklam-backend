@@ -48,9 +48,9 @@ Visitor IP/user-agent/referrer fields are anonymized after TRAFFIC_RETENTION_DAY
 Search Console ownership and analytics ingestion require this site's own verified property. Never reuse football's identifiers or assume its account access. Public crawl/metadata checks are separate from indexing and ranking evidence.
 
 
-## Release 20260912-v3 details
+## Release 20260912-v4 details
 
-Both applications are under `/home/ugn/reklam-releases/20260912-v3`. The API public symlink points to its backend/public. The versioned `ecosystem.config.cjs` names the frontend standalone server, cwd, environment and interpreter. Use `/home/ugn/reklam-runtime/node-v22.23.2-linux-x64/bin/node`; do not replace the system Node used by other sites. Set NODE_BINARY to this path for the banner generator. Puppeteer's Chrome cache belongs to ugn at `/home/ugn/.cache/puppeteer`.
+Both applications are under `/home/ugn/reklam-releases/20260912-v4`. The API public symlink points to its backend/public. The versioned `ecosystem.config.cjs` names the frontend standalone server, cwd, environment and interpreter. Use `/home/ugn/reklam-runtime/node-v22.23.2-linux-x64/bin/node`; do not replace the system Node used by other sites. Set NODE_BINARY to this path for the banner generator. Puppeteer's Chrome cache belongs to ugn at `/home/ugn/.cache/puppeteer`.
 
 The domain include is `/etc/nginx/conf.d/users/ugn/reklam.biz.ug2.news/reklam-next.conf`; its upstream is `http://[::1]:3059`. HOSTNAME=localhost is necessary for this standalone proxy setup. Apache's release public files must be owned by ugn and not group-writable, with the PHP 8.4 handler in .htaccess. Verify external HTTP after a reload, not just process startup.
 
@@ -59,3 +59,6 @@ Build in a new release directory. Copy public and .next/static into .next/standa
 The original API public directory is `/home/ugn/api.reklam.biz/public.before-20260912`. The original frontend is `/home/ugn/reklam.biz`. The initial backup directory is `/home/ugn/reklam-backups/20260912-production-v1`. The v1 and v2 release directories are also retained. Roll back application routing without dropping additive database columns.
 
 Health monitor: `bash <release>/backend/scripts/product-monitor.sh`. Its output is `/home/ugn/api.reklam.biz/storage/logs/product-monitor.log`. Scheduler output is in the same directory's scheduler.log. No email/Slack alerts are sent. The admin bootstrap refuses existing accounts; a new account requires REKLAM_ADMIN_PASSWORD with at least 24 characters. Keep credentials outside Git.
+
+
+Support is handled inside the product. Operators should check `/admin/support` and answer requests there; users read replies at `/settings/support`. There is no configured email notification channel. The support table is additive and may remain when rolling back the UI. Do not restore a database merely to roll back a support-page change.
