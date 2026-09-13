@@ -35,3 +35,10 @@ Apply the azdoc research summarized in plans/2026-09-12-specific-design.md. An "
 Use the product itself as visual substance: supported ad formats, credible house advertising, actual placement choices and real interactions. Give information different layouts when its role differs. Write Azerbaijani from the intended meaning, keep it short, and remove phrases that merely sound polished. Review all locales in their full page context.
 
 The public format gallery places advertising attribution below the creative, outside its fixed dimensions. Keep a usable link target without expanding an overlay across banner content, especially at 320x50. Reserve label space before loading to avoid movement.
+
+
+## September 13 public campaign refinement
+
+The public campaign-design scope replaces the text-heavy graphite publisher hero with an open headline/action area and a saturated red commission poster. The first section remains publisher acquisition. Its large 0% represents the real offer; terms and fees remain beside the figure. The advertiser section uses a framed interactive format gallery with subtle quarter-width guides. Follow with advertiser detail, FAQ and a compact graphite closing panel. Compact authenticated offer cards keep their account-specific expiry behavior.
+
+Smartbee was reviewed as a quality reference for hierarchy and product presentation. No competitor content, assets, metrics, logos or layout were copied. See plans/2026-09-13-public-campaign-design.md. Existing 30% post-offer commission was explicitly confirmed by the owner.

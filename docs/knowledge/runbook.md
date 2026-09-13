@@ -86,3 +86,5 @@ Before API cutover, remove group/other write permissions on the new backend publ
 Retain publisher offer dates during rollback. Do not run the offer migration's down method or restore old balances. An API rollback to v4 must first carry forward Publisher's offer dates/rate method, the config key and both ServeController commission calls, so existing promised 0% periods remain honored. Frontend-only rollback can use the retained ad-label release.
 
 Publisher hero placement: active frontend is `20260913-publisher-hero`, source `0689963`. Backend remains `20260913-publisher-offer`. Prior frontend release `20260913-publisher-offer` is available for rollback.
+
+Active public design frontend: `20260913-campaign-design`, source `f76bc61`. Backend remains publisher-offer. Prior frontend `20260913-publisher-hero` retained for rollback.
