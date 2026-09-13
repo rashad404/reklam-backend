@@ -88,3 +88,5 @@ Retain publisher offer dates during rollback. Do not run the offer migration's d
 Publisher hero placement: active frontend is `20260913-publisher-hero`, source `0689963`. Backend remains `20260913-publisher-offer`. Prior frontend release `20260913-publisher-offer` is available for rollback.
 
 Active public design frontend: `20260913-campaign-design`, source `f76bc61`. Backend remains publisher-offer. Prior frontend `20260913-publisher-hero` retained for rollback.
+
+Footer logo alignment: active frontend `20260913-footer-logo`, source `ceea483`. Uses header logo SVGs in light/dark themes; removed text-only wordmark. Production build/lint and four mobile/desktop theme checks passed, including the home link and product monitor. Previous campaign-design frontend retained for rollback.
