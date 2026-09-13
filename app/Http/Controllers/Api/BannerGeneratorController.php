@@ -29,8 +29,8 @@ class BannerGeneratorController extends Controller
         ]);
 
         $scriptPath = base_path('scripts/generate-banner.cjs');
-        $nodePath = trim(shell_exec('which node') ?? '/opt/homebrew/bin/node');
-        $result = Process::timeout(30)->run("{$nodePath} {$scriptPath} ".escapeshellarg($args));
+        $nodePath = config('reklam.node_binary');
+        $result = Process::timeout(30)->run([$nodePath, $scriptPath, $args]);
 
         if (! $result->successful()) {
             return response()->json([

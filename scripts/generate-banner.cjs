@@ -205,7 +205,7 @@ const html = `<!DOCTYPE html>
   await page.setJavaScriptEnabled(false);
   await page.setRequestInterception(true);
   page.on('request', request => request.abort());
-  await page.setViewport({ width, height, deviceScaleFactor: 2 });
+  await page.setViewport({ width, height, deviceScaleFactor: 1 });
   await page.setContent(html, { waitUntil: 'networkidle0' });
   await page.evaluate(() => document.fonts.ready);
 

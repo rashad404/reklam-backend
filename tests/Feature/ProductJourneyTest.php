@@ -9,6 +9,7 @@ use App\Models\Publisher;
 use App\Models\User;
 use App\Services\SiteVerification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -183,5 +184,30 @@ class ProductJourneyTest extends TestCase
     {
         $this->postJson('/api/auth/wallet/callback', ['code' => 'x', 'code_verifier' => 'y', 'redirect_uri' => 'https://evil.example'])->assertUnprocessable();
         Http::assertNothingSent();
+    }
+
+    public function test_health_detects_stale_aggregation(): void
+    {
+        Cache::forget('stats:last_aggregate');
+        $this->artisan('product:health')->assertFailed();
+        Cache::put('stats:last_aggregate', now()->toIso8601String());
+        $this->artisan('product:health')->assertSuccessful();
+        Cache::put('stats:last_aggregate', now()->subHours(3)->toIso8601String());
+        $this->artisan('product:health')->assertFailed();
+    }
+
+    public function test_retention_preserves_counts_and_recent_identifiers(): void
+    {
+        $i = $this->inventory();
+        $fields = ['ad_id' => $i['ad']->id, 'ad_unit_id' => $i['unit']->id, 'campaign_id' => $i['campaign']->id, 'advertiser_id' => $i['advertiser']->id, 'publisher_id' => $i['publisher']->id, 'is_unique' => true, 'user_agent' => 'Test browser'];
+        $old = Impression::create($fields + ['ip' => null, 'created_at' => now()->subDays(100)]);
+        $recent = Impression::create($fields + ['ip' => '192.0.2.1']);
+        DB::table('impressions')->where('id', $old->id)->update(['created_at' => now()->subDays(100)]);
+        $this->artisan('traffic:retain')->assertSuccessful();
+        $this->assertDatabaseHas('impressions', ['id' => $old->id, 'user_agent' => 'Test browser']);
+        $this->artisan('traffic:retain --apply')->assertSuccessful();
+        $this->assertDatabaseCount('impressions', 2);
+        $this->assertDatabaseHas('impressions', ['id' => $old->id, 'user_agent' => null, 'is_unique' => true]);
+        $this->assertDatabaseHas('impressions', ['id' => $recent->id, 'ip' => '192.0.2.1']);
     }
 }

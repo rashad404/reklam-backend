@@ -15,10 +15,17 @@ class RetainTraffic extends Command
     {
         $cutoff = now()->subDays(max(30, config('reklam.raw_retention_days')));
         foreach (['impressions', 'clicks'] as $table) {
-            $query = DB::table($table)->where('created_at', '<', $cutoff)->whereNotNull('ip');
+            $query = DB::table($table)->where('created_at', '<', $cutoff)->where(function ($q) use ($table) {
+                $q->whereNotNull('ip')->orWhereNotNull('user_agent');
+                if ($table === 'clicks') {
+                    $q->orWhereNotNull('referrer');
+                }
+            });
             $this->line($table.': '.$query->count().' visitor records eligible for anonymization');
             if ($this->option('apply')) {
-                $query->update(['ip' => null, 'user_agent' => null] + ($table === 'clicks' ? ['referrer' => null] : []));
+                $query->select('id')->chunkById(5000, function ($rows) use ($table) {
+                    DB::table($table)->whereIn('id', $rows->pluck('id'))->update(['ip' => null, 'user_agent' => null] + ($table === 'clicks' ? ['referrer' => null] : []));
+                });
             }
         }
         if ($this->option('apply')) {
