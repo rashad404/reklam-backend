@@ -11,3 +11,5 @@ Public content should explain actual tasks. Use localized metadata, canonical la
 Fix problems within the authorized task before calling it complete. Store detailed evidence in knowledge plans/audits. These requirements do not introduce another approval step. Do not spawn agents unless separately authorized.
 
 Production copy must describe the product, not the rollout. Do not put release disclaimers, demo-status language, or payment-unavailability banners on public pages. Until payment functionality is enabled, only payment pages should say it will be available soon. Public ad-format displays use real Reklam.biz house advertising with advertising attribution. Do not call the production product a demo.
+
+Public marketing should answer why advertisers and publishers should join: customer discovery, advertising revenue, suitable formats, budget control and useful results. Do not turn the homepage or acquisition pages into an implementation checklist. Review, verification, validation and installation mechanics belong in contextual workspace instructions and help. Keep benefit claims grounded, without invented reach, guaranteed sales or guaranteed income.
