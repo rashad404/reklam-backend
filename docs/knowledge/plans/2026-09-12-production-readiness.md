@@ -235,4 +235,9 @@ Read for working principles:
 - `/Users/macmini/projects/football/docs/knowledge/plans/2026-09-12-fpredict-production-release.md`
 - `/Users/macmini/projects/football/docs/knowledge/plans/2026-09-12-fpredict-seo-audit.md`
 
-Reklam.biz findings come from the current frontend/backend source and current knowledge guides. Old Reklam.biz plans were not used as the task backlog. Football-specific statistics, domain strategy and infrastructure have not been adopted. This planning task changes documentation only.
+Reklam.biz findings come from the current frontend/backend source and current knowledge guides. Old Reklam.biz plans were not used as the task backlog. Football-specific statistics, domain strategy and infrastructure have not been adopted. The original planning pass changed documentation only. Implementation and deployment were subsequently authorized and are recorded in the release audit.
+
+
+## Implementation record
+
+Implemented and deployed on 2026-09-12 (America/Chicago), 2026-09-13 UTC. See [release evidence](../audits/2026-09-12-implementation.md) and [operations](../runbook.md). The non-payment application work covers all seven phases. External Search Console/analytics account configuration, the optional www DNS alias and real-user OAuth completion remain explicitly unverified or unavailable; they are not represented as completed checks. The initial vertical slice was internal organization, not a staged delivery to the user.

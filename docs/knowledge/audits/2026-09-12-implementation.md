@@ -1,6 +1,6 @@
 # Reklam.biz implementation evidence
 
-Status: Local implementation verified; production deployment in progress.
+Status: Implemented and deployed. External account dependencies and verification limits are listed below.
 
 ## Implemented
 
@@ -17,7 +17,7 @@ Status: Local implementation verified; production deployment in progress.
 
 ## Local evidence
 
-- Backend: 14 tests / 88 assertions pass, including retry idempotency, cross-account denial, creative removal, verification/moderation, token/replay handling, reporting and aggregation reruns.
+- Backend: 17 tests / 99 assertions pass, including retry idempotency, cross-account denial, creative removal, verification/moderation, token/replay handling, reporting and aggregation reruns.
 - Frontend: production build passes; lint passes without findings after cleanup.
 - Browser: 6 end-to-end checks pass using Chrome and isolated SQLite fixtures. Covers campaign create/reload/edit, publisher placement/code, admin denial and decisions, duplicate independent embeds, public page metadata and language, mobile widths 320/390 and desktop 1440, dark mode and axe accessibility checks.
 - Desktop Azerbaijani and narrow Russian homepage screenshots inspected. Screenshot and interaction artifacts are under frontend/test-results locally and are not production data.
@@ -30,3 +30,28 @@ The old public domain is a Laravel site. A separate Next.js checkout exists but 
 A consistent SQL backup was restored into a separate database before migration rehearsal. The live site continues receiving impressions, so a later live row count is expected to exceed the snapshot. Verify restored rows against the snapshot maximum ID instead of claiming two different-time live counts match.
 
 The existing Google service account has no Reklam.biz Search Console property. A Site Verification API capability check returned 403. No other site's property, analytics identifier or traffic data was reused. Sitemap discovery and rendered SEO remain part of this release; Search Console access is an external configuration dependency.
+
+## Final release verification
+
+Release path: `/home/ugn/reklam-releases/20260912-v3`. Frontend source: `2b02c0ad6dc64a77eed42a381af54837942bce74`. Backend source: `91cb21b844070ebfb17756bf679b2c1e5ccec10e`. Later documentation-only commits mirror this evidence and do not change application behavior.
+
+- Next.js 16.3.5, isolated Node 22.23.2 runtime, PHP 8.4, Laravel 13.31.0. Both npm audits and the production Composer audit report zero known advisories at release time.
+- Backend: 17 tests, 99 assertions. Includes end-date-only campaigns, stale aggregation failure detection, and retention preserving historical counts and recent identifiers.
+- All six browser journeys pass against an isolated production frontend build. Live public-page browser checks pass in AZ/EN/RU at 320/390/1440px, plus dark-mode and axe checks.
+- Live rendered-HTML audit: all 21 sitemap URLs return 200, correct language, self-canonical and AZ/EN/RU/x-default metadata. Three sampled private workspace routes return noindex headers. `/az` redirects to `/` with 308.
+- Live administrator email/password login, overview and both review queues work with no browser console errors. The release administrator is a new dedicated account; no existing account was elevated. Credentials are stored only in the local private workspace file `.private/production-admin.txt`, outside both repositories.
+- Live Kimlik login initiation reaches its English authorization sign-in page. No real end-user identity credentials were available, so a complete external-provider login is not claimed as tested.
+- Real production placement requests and token-bound impressions were observed after cutover. Synthetic checks did not call impression/click tracking endpoints. The existing approved publisher was retained after manual operator verification against cPanel domain ownership; the decision is recorded in `moderation_decisions`. New registrations require DNS verification.
+- Mobile Lighthouse on the live homepage: performance 98, accessibility 100, best practices 100, SEO 100; LCP 2.1s, CLS 0.062. This is a lab measurement, not field evidence or a ranking guarantee.
+- The patched banner generator produced an exact-size image under the unprivileged production application user with external requests disabled.
+- Database, aggregation and HTTP monitor pass. Scheduler runs every minute; read-only product monitor every five minutes. Automated tests demonstrate that stale aggregation makes health checks fail. Monitoring writes a local operational log; no external alert channel was configured or messaged.
+
+Backup: `/home/ugn/reklam-backups/20260912-production-v1/database.sql.gz` (about 180 MB compressed). Its restored snapshot contains 4,536,024 impressions, matching the live table restricted to the snapshot's maximum ID, and 26,841 clicks. The additive migration passed on that restored database before production. Original checkouts, original API public directory and first releases remain available. Final routing uses the versioned API public symlink and the PM2 process named `reklam-frontend`.
+
+## Security finding and external dependencies
+
+During the remote-history merge, commits `f3e0b5d` (frontend) and `f94b202` (backend) contained a `postinstall` hook that downloaded and ran an executable from an unrelated GitHub release into `/tmp/.sshd`. It was excluded from the release and removed from both current repository tips. The checked production package files, payload path and process list did not show that hook/payload running. This limited check does not establish how the commits were introduced or prove that every credential/host is uncompromised. The repository owner should review GitHub account, collaborators, keys and audit history. The malicious history was preserved as evidence rather than force-rewritten.
+
+The available Google service account has no Reklam.biz property and Site Verification returned 403. Search Console ownership, analytics property creation/ingestion and field performance are external account work, not silently marked complete. `www.reklam.biz` has no DNS record at verification time; the canonical apex domain works and the origin redirect is prepared for when that DNS alias is configured. No suitable DNS API credentials were available in the project environment.
+
+Payment implementation, reconciliation and financial correctness certification remain excluded. Existing charge code was not redesigned. Delivery and reporting changes must not be represented as financial certification.

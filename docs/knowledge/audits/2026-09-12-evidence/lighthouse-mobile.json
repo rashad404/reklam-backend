@@ -1,0 +1,16 @@
+{
+  "url": "https://reklam.biz/",
+  "measured_at": "2026-09-13T00:31:39.482Z",
+  "scores": {
+    "performance": 0.98,
+    "accessibility": 1,
+    "best-practices": 1,
+    "seo": 1
+  },
+  "metrics": {
+    "largest-contentful-paint": 2129.447,
+    "cumulative-layout-shift": 0.06180759670692221,
+    "total-blocking-time": 0,
+    "first-contentful-paint": 935.447
+  }
+}
