@@ -64,7 +64,7 @@ class CampaignController extends Controller
             'cpc_bid' => 'nullable|numeric|min:0.01|max:1000',
             'cpm_bid' => 'nullable|numeric|min:0.01|max:1000',
             'start_date' => 'nullable|date_format:Y-m-d',
-            'end_date' => 'nullable|date_format:Y-m-d|after_or_equal:start_date',
+            'end_date' => ['nullable', 'date_format:Y-m-d', ...($request->filled('start_date') ? ['after_or_equal:start_date'] : [])],
             'targeting_json' => 'prohibited',
             'ads' => 'required|array|min:1|max:4',
             'ads.*.title' => 'nullable|string|max:120', 'ads.*.description' => 'nullable|string|max:240',

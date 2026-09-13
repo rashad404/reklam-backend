@@ -210,4 +210,15 @@ class ProductJourneyTest extends TestCase
         $this->assertDatabaseHas('impressions', ['id' => $old->id, 'user_agent' => null, 'is_unique' => true]);
         $this->assertDatabaseHas('impressions', ['id' => $recent->id, 'ip' => '192.0.2.1']);
     }
+
+    public function test_campaign_can_set_only_an_end_date(): void
+    {
+        $this->owner();
+        $payload = $this->payload();
+        $payload['end_date'] = now()->addWeek()->toDateString();
+        $this->postJson('/api/campaigns', $payload)->assertCreated();
+        $payload['request_key'] = (string) Str::uuid();
+        $payload['start_date'] = now()->addWeeks(2)->toDateString();
+        $this->postJson('/api/campaigns', $payload)->assertUnprocessable();
+    }
 }
