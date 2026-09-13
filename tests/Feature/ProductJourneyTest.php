@@ -221,4 +221,22 @@ class ProductJourneyTest extends TestCase
         $payload['start_date'] = now()->addWeeks(2)->toDateString();
         $this->postJson('/api/campaigns', $payload)->assertUnprocessable();
     }
+
+    public function test_support_is_private_retry_safe_and_admin_replies_are_visible(): void
+    {
+        $owner = $this->owner();
+        $data = ['request_key' => (string) Str::uuid(), 'subject' => 'Campaign question', 'message' => 'Please explain the campaign review status.'];
+        $id = $this->postJson('/api/support', $data)->assertCreated()->json('data.id');
+        $this->postJson('/api/support', $data)->assertCreated()->assertJsonPath('data.id', $id);
+        $this->assertDatabaseCount('support_requests', 1);
+        $this->owner();
+        $this->getJson('/api/support')->assertOk()->assertJsonPath('data.total', 0);
+        $this->patchJson('/api/admin/support/'.$id, ['reply' => 'Not allowed', 'status' => 'answered'])->assertForbidden();
+        $admin = User::factory()->create(['is_admin' => true]);
+        Sanctum::actingAs($admin);
+        $this->getJson('/api/admin/support')->assertOk()->assertJsonPath('data.total', 1);
+        $this->patchJson('/api/admin/support/'.$id, ['reply' => 'Your campaign is waiting for review.', 'status' => 'answered'])->assertOk();
+        Sanctum::actingAs($owner);
+        $this->getJson('/api/support')->assertOk()->assertJsonPath('data.data.0.reply', 'Your campaign is waiting for review.');
+    }
 }

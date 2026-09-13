@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\CampaignController;
 use App\Http\Controllers\Api\PublisherController;
 use App\Http\Controllers\Api\ServeController;
 use App\Http\Controllers\Api\StatsController;
+use App\Http\Controllers\Api\SupportController;
 use App\Http\Controllers\Api\UploadController;
 use Illuminate\Support\Facades\Route;
 
@@ -26,6 +27,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/user', [AuthController::class, 'user']);
     Route::post('/auth/sync-from-wallet', [AuthController::class, 'syncFromWallet']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
+
+    Route::get('/support', [SupportController::class, 'index']);
+    Route::post('/support', [SupportController::class, 'store'])->middleware('throttle:5,1');
 
     // Upload & Generate
     Route::post('/upload/image', [UploadController::class, 'image']);
@@ -84,6 +88,8 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
     Route::middleware('admin')->prefix('admin')->group(function () {
+        Route::get('/support', [SupportController::class, 'queue']);
+        Route::patch('/support/{ticket}', [SupportController::class, 'reply'])->whereNumber('ticket');
         Route::get('/dashboard', [AdminController::class, 'dashboard']);
         Route::get('/publishers', [AdminController::class, 'publishers']);
         Route::patch('/publishers/{publisher}/approve', [AdminController::class, 'approvePublisher']);
