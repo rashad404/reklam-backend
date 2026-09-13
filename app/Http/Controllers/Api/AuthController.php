@@ -74,12 +74,12 @@ class AuthController extends Controller
         abort_unless(in_array($request->redirect_uri, [rtrim(config('reklam.frontend_url'), '/').'/auth/wallet/callback'], true), 422, 'Invalid redirect URI.');
 
         try {
-            $walletApiUrl = env('WALLET_API_URL', 'https://api.kimlik.az/api');
-            $clientId = env('WALLET_CLIENT_ID');
-            $clientSecret = env('WALLET_CLIENT_SECRET');
+            $walletApiUrl = rtrim(config('services.wallet.api_url'), '/');
+            $clientId = config('services.wallet.client_id');
+            $clientSecret = config('services.wallet.client_secret');
 
             // Exchange authorization code for tokens
-            $tokenResponse = Http::post("{$walletApiUrl}/oauth/token", [
+            $tokenResponse = Http::acceptJson()->connectTimeout(5)->timeout(20)->post("{$walletApiUrl}/oauth/token", [
                 'grant_type' => 'authorization_code',
                 'client_id' => $clientId,
                 'client_secret' => $clientSecret,
@@ -105,7 +105,7 @@ class AuthController extends Controller
             if (empty($tokens['access_token'])) {
                 Log::error('Wallet OAuth: no access token', [
                     'status' => $tokenResponse->status(),
-                    'error' => $tokens['error'] ?? $tokens['message'] ?? 'unknown',
+                    'error' => 'missing_access_token',
                 ]);
 
                 return response()->json([
@@ -115,7 +115,7 @@ class AuthController extends Controller
             }
 
             // Fetch user data from Kimlik.az
-            $userResponse = Http::withToken($tokens['access_token'])
+            $userResponse = Http::acceptJson()->connectTimeout(5)->timeout(20)->withToken($tokens['access_token'])
                 ->get("{$walletApiUrl}/oauth/user");
 
             if (! $userResponse->successful()) {
@@ -197,9 +197,9 @@ class AuthController extends Controller
         }
 
         try {
-            $walletApiUrl = env('WALLET_API_URL', 'https://api.kimlik.az/api');
+            $walletApiUrl = rtrim(config('services.wallet.api_url'), '/');
 
-            $userResponse = Http::withToken($user->wallet_access_token)
+            $userResponse = Http::acceptJson()->connectTimeout(5)->timeout(20)->withToken($user->wallet_access_token)
                 ->get("{$walletApiUrl}/oauth/user");
 
             if (! $userResponse->successful()) {
@@ -219,7 +219,7 @@ class AuthController extends Controller
                 'data' => $user->fresh()->load(['advertiser', 'publisher']),
             ]);
         } catch (\Exception $e) {
-            Log::error('Wallet sync error', ['message' => $e->getMessage()]);
+            Log::error('Wallet sync error', ['exception' => get_class($e)]);
 
             return response()->json(['status' => 'error', 'message' => 'Sync failed'], 500);
         }
