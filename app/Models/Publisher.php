@@ -8,7 +8,7 @@ class Publisher extends Model
 {
     protected $fillable = [
         'user_id', 'website_url', 'website_name', 'category', 'status', 'approved_at',
-        'balance', 'total_earned',
+        'balance', 'total_earned', 'verification_token', 'verified_at', 'review_reason',
     ];
 
     protected $casts = [

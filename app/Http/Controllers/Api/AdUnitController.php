@@ -12,7 +12,7 @@ class AdUnitController extends Controller
     {
         $publisher = $request->user()->publisher;
 
-        if (!$publisher) {
+        if (! $publisher) {
             return response()->json(['status' => 'error', 'message' => 'Not a publisher'], 403);
         }
 
@@ -31,16 +31,18 @@ class AdUnitController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'ad_format' => 'required|in:banner_728x90,banner_300x250,banner_320x50,native,text',
-            'website_url' => 'required|url|max:255',
-            'page_url' => 'nullable|url|max:255',
+            'ad_format' => 'required|in:banner_728x90,banner_300x250,banner_320x50,text',
+            'website_url' => 'required|url:http,https|max:255',
+            'page_url' => 'nullable|url:http,https|max:255',
         ]);
 
         $publisher = $request->user()->publisher;
 
-        if (!$publisher) {
+        if (! $publisher) {
             return response()->json(['status' => 'error', 'message' => 'Not a publisher'], 403);
         }
+
+        abort_unless(strtolower(parse_url($request->website_url, PHP_URL_HOST)) === strtolower(parse_url($publisher->website_url, PHP_URL_HOST)), 422, 'Placement must belong to your registered site.');
 
         $adUnit = $publisher->adUnits()->create($request->only([
             'name', 'ad_format', 'website_url', 'page_url',
@@ -56,14 +58,14 @@ class AdUnitController extends Controller
     {
         $publisher = $request->user()->publisher;
 
-        if (!$publisher || $adUnit->publisher_id !== $publisher->id) {
+        if (! $publisher || $adUnit->publisher_id !== $publisher->id) {
             return response()->json(['status' => 'error', 'message' => 'Unauthorized'], 403);
         }
 
         $request->validate([
             'name' => 'sometimes|string|max:255',
             'status' => 'sometimes|in:active,paused',
-            'page_url' => 'nullable|url|max:255',
+            'page_url' => 'nullable|url:http,https|max:255',
         ]);
 
         $adUnit->update($request->only(['name', 'status', 'page_url']));
@@ -78,7 +80,7 @@ class AdUnitController extends Controller
     {
         $publisher = $request->user()->publisher;
 
-        if (!$publisher || $adUnit->publisher_id !== $publisher->id) {
+        if (! $publisher || $adUnit->publisher_id !== $publisher->id) {
             return response()->json(['status' => 'error', 'message' => 'Unauthorized'], 403);
         }
 
@@ -94,13 +96,12 @@ class AdUnitController extends Controller
     {
         $publisher = $request->user()->publisher;
 
-        if (!$publisher || $adUnit->publisher_id !== $publisher->id) {
+        if (! $publisher || $adUnit->publisher_id !== $publisher->id) {
             return response()->json(['status' => 'error', 'message' => 'Unauthorized'], 403);
         }
 
-        $format = str_replace('banner_', '', $adUnit->ad_format);
-        $code = '<div id="reklam-ad" data-unit="' . $adUnit->id . '" data-format="' . $format . '"></div>' . "\n"
-            . '<script async src="https://reklam.biz/serve.js"></script>';
+        $code = '<div data-reklam data-format="'.str_replace('banner_', '', $adUnit->ad_format).'" data-unit="'.$adUnit->id.'"></div>'."\n"
+            .'<script async src="'.e(config('reklam.embed_url')).'"></script>';
 
         return response()->json([
             'status' => 'success',

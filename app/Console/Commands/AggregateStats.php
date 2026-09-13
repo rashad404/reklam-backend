@@ -2,41 +2,49 @@
 
 namespace App\Console\Commands;
 
-use App\Models\DailyStat;
+use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class AggregateStats extends Command
 {
     protected $signature = 'stats:aggregate {--date= : Date to aggregate (default: today)}';
+
     protected $description = 'Aggregate impressions and clicks into daily_stats';
 
     public function handle(): void
     {
-        $date = $this->option('date') ?: now()->toDateString();
+        $date = $this->option('date') ?: now('Asia/Baku')->toDateString();
+        if (! preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $date)) {
+            $this->error('Invalid date');
+
+            return;
+        }
+        $dateSql = DB::connection()->getDriverName() === 'sqlite' ? "DATE(created_at, '+4 hours')" : 'DATE(DATE_ADD(created_at, INTERVAL 4 HOUR))';
         $this->info("Aggregating stats for {$date}...");
 
         // Aggregate impressions grouped by ad, ad_unit, country, device
         $impressions = DB::table('impressions')
             ->select(
-                DB::raw("DATE(created_at) as date"),
+                DB::raw($dateSql.' as date'),
                 'ad_id', 'campaign_id', 'ad_unit_id', 'publisher_id', 'advertiser_id',
                 'country', 'device_type',
                 DB::raw('COUNT(*) as impressions')
             )
-            ->whereDate('created_at', $date)
+            ->where('created_at', '>=', Carbon::parse($date, 'Asia/Baku')->utc())->where('created_at', '<', Carbon::parse($date, 'Asia/Baku')->addDay()->utc())
             ->groupBy('date', 'ad_id', 'campaign_id', 'ad_unit_id', 'publisher_id', 'advertiser_id', 'country', 'device_type')
             ->get();
 
         // Aggregate clicks
         $clicks = DB::table('clicks')
             ->select(
-                DB::raw("DATE(created_at) as date"),
+                DB::raw($dateSql.' as date'),
                 'ad_id', 'campaign_id', 'ad_unit_id', 'publisher_id', 'advertiser_id',
                 'country', 'device_type',
                 DB::raw('COUNT(*) as clicks')
             )
-            ->whereDate('created_at', $date)
+            ->where('created_at', '>=', Carbon::parse($date, 'Asia/Baku')->utc())->where('created_at', '<', Carbon::parse($date, 'Asia/Baku')->addDay()->utc())
             ->groupBy('date', 'ad_id', 'campaign_id', 'ad_unit_id', 'publisher_id', 'advertiser_id', 'country', 'device_type')
             ->get();
 
@@ -51,8 +59,8 @@ class AggregateStats extends Command
                 'ad_unit_id' => $row->ad_unit_id,
                 'publisher_id' => $row->publisher_id,
                 'advertiser_id' => $row->advertiser_id,
-                'country' => $row->country,
-                'device_type' => $row->device_type,
+                'country' => $row->country ?? 'ZZ',
+                'device_type' => $row->device_type ?? 'unknown',
                 'impressions' => $row->impressions,
                 'clicks' => 0,
             ];
@@ -70,41 +78,48 @@ class AggregateStats extends Command
                     'ad_unit_id' => $row->ad_unit_id,
                     'publisher_id' => $row->publisher_id,
                     'advertiser_id' => $row->advertiser_id,
-                    'country' => $row->country,
-                    'device_type' => $row->device_type,
+                    'country' => $row->country ?? 'ZZ',
+                    'device_type' => $row->device_type ?? 'unknown',
                     'impressions' => 0,
                     'clicks' => $row->clicks,
                 ];
             }
         }
 
-        // Upsert into daily_stats
+        // Replace one day atomically, including legacy rows with null dimensions.
         $count = 0;
-        foreach ($stats as $stat) {
-            $ctr = $stat['impressions'] > 0
-                ? round(($stat['clicks'] / $stat['impressions']) * 100, 4)
-                : 0;
+        DB::transaction(function () use ($date, $stats, &$count) {
+            DB::table('daily_stats')->whereDate('date', $date)->delete();
+            foreach ($stats as $stat) {
+                $ctr = $stat['impressions'] > 0
+                    ? round(($stat['clicks'] / $stat['impressions']) * 100, 4)
+                    : 0;
 
-            DailyStat::updateOrCreate(
-                [
-                    'date' => $stat['date'],
-                    'ad_id' => $stat['ad_id'],
-                    'ad_unit_id' => $stat['ad_unit_id'],
-                    'country' => $stat['country'],
-                    'device_type' => $stat['device_type'],
-                ],
-                [
-                    'campaign_id' => $stat['campaign_id'],
-                    'publisher_id' => $stat['publisher_id'],
-                    'advertiser_id' => $stat['advertiser_id'],
-                    'impressions' => $stat['impressions'],
-                    'clicks' => $stat['clicks'],
-                    'ctr' => $ctr,
-                ]
-            );
-            $count++;
-        }
+                DB::table('daily_stats')->updateOrInsert(
+                    [
+                        'date' => $stat['date'],
+                        'ad_id' => $stat['ad_id'],
+                        'ad_unit_id' => $stat['ad_unit_id'],
+                        'country' => $stat['country'],
+                        'device_type' => $stat['device_type'],
+                    ],
+                    [
+                        'campaign_id' => $stat['campaign_id'],
+                        'publisher_id' => $stat['publisher_id'],
+                        'advertiser_id' => $stat['advertiser_id'],
+                        'impressions' => $stat['impressions'],
+                        'clicks' => $stat['clicks'],
+                        'ctr' => $ctr,
+                        'updated_at' => now(),
+                        'created_at' => now(),
+                    ]
+                );
+                $count++;
+            }
 
+        });
+
+        Cache::put('stats:last_aggregate', now()->toIso8601String(), 10800);
         $this->info("Aggregated {$count} stat rows for {$date}.");
     }
 }

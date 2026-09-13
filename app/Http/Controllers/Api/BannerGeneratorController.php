@@ -13,7 +13,7 @@ class BannerGeneratorController extends Controller
         $request->validate([
             'title' => 'required|string|max:60',
             'description' => 'nullable|string|max:120',
-            'color' => 'nullable|string|max:7',
+            'color' => 'nullable|regex:/^#[0-9a-fA-F]{6}$/',
             'size' => 'nullable|string|in:728x90,300x250,320x50',
             'domain' => 'nullable|string|max:50',
             'template' => 'nullable|string|max:20',
@@ -30,19 +30,19 @@ class BannerGeneratorController extends Controller
 
         $scriptPath = base_path('scripts/generate-banner.cjs');
         $nodePath = trim(shell_exec('which node') ?? '/opt/homebrew/bin/node');
-        $result = Process::timeout(30)->run("{$nodePath} {$scriptPath} " . escapeshellarg($args));
+        $result = Process::timeout(30)->run("{$nodePath} {$scriptPath} ".escapeshellarg($args));
 
-        if (!$result->successful()) {
+        if (! $result->successful()) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Banner generation failed',
-                'debug' => $result->errorOutput(),
+
             ], 500);
         }
 
         $output = json_decode(trim($result->output()), true);
 
-        if (!$output || !isset($output['filename'])) {
+        if (! $output || ! isset($output['filename'])) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Invalid generator output',
@@ -52,7 +52,7 @@ class BannerGeneratorController extends Controller
         return response()->json([
             'status' => 'success',
             'data' => [
-                'url' => url('/storage/' . $output['filename']),
+                'url' => url('/storage/'.$output['filename']),
                 'size' => $request->input('size', '300x250'),
             ],
         ]);

@@ -13,7 +13,7 @@ class AdController extends Controller
     {
         $advertiser = $request->user()->advertiser;
 
-        if (!$advertiser) {
+        if (! $advertiser) {
             return response()->json(['status' => 'error', 'message' => 'Not an advertiser'], 403);
         }
 
@@ -33,21 +33,21 @@ class AdController extends Controller
             'campaign_id' => 'required|exists:campaigns,id',
             'title' => 'required|string|max:255',
             'description' => 'nullable|string|max:1000',
-            'image_url' => 'nullable|url',
-            'destination_url' => 'required|url',
+            'image_url' => 'nullable|url:http,https',
+            'destination_url' => 'required|url:http,https',
             'ad_format' => 'required|in:banner_728x90,banner_300x250,banner_320x50,native,text',
         ]);
 
         $advertiser = $request->user()->advertiser;
         $campaign = Campaign::find($request->campaign_id);
 
-        if (!$advertiser || $campaign->advertiser_id !== $advertiser->id) {
+        if (! $advertiser || $campaign->advertiser_id !== $advertiser->id) {
             return response()->json(['status' => 'error', 'message' => 'Unauthorized'], 403);
         }
 
         $ad = $campaign->ads()->create(array_merge(
             $request->only(['title', 'description', 'image_url', 'destination_url', 'ad_format']),
-            ['status' => 'approved']
+            ['status' => 'pending']
         ));
 
         return response()->json([
@@ -60,18 +60,23 @@ class AdController extends Controller
     {
         $advertiser = $request->user()->advertiser;
 
-        if (!$advertiser || $ad->campaign->advertiser_id !== $advertiser->id) {
+        if (! $advertiser || $ad->campaign->advertiser_id !== $advertiser->id) {
             return response()->json(['status' => 'error', 'message' => 'Unauthorized'], 403);
         }
 
         $request->validate([
             'title' => 'sometimes|string|max:255',
             'description' => 'nullable|string|max:1000',
-            'image_url' => 'nullable|url',
-            'destination_url' => 'sometimes|url',
+            'image_url' => 'nullable|url:http,https',
+            'destination_url' => 'sometimes|url:http,https',
         ]);
 
-        $ad->update($request->only(['title', 'description', 'image_url', 'destination_url']));
+        $ad->fill($request->only(['title', 'description', 'image_url', 'destination_url']));
+        if ($ad->isDirty()) {
+            $ad->status = 'pending';
+            $ad->review_reason = null;
+        }
+        $ad->save();
 
         return response()->json([
             'status' => 'success',
@@ -83,7 +88,7 @@ class AdController extends Controller
     {
         $advertiser = $request->user()->advertiser;
 
-        if (!$advertiser || $ad->campaign->advertiser_id !== $advertiser->id) {
+        if (! $advertiser || $ad->campaign->advertiser_id !== $advertiser->id) {
             return response()->json(['status' => 'error', 'message' => 'Unauthorized'], 403);
         }
 

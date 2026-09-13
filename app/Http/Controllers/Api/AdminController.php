@@ -9,82 +9,62 @@ use App\Models\Click;
 use App\Models\Impression;
 use App\Models\Publisher;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class AdminController extends Controller
 {
     public function dashboard(Request $request)
     {
-        return response()->json([
-            'status' => 'success',
-            'data' => [
-                'total_publishers' => Publisher::count(),
-                'total_advertisers' => Advertiser::count(),
-                'total_impressions' => Impression::count(),
-                'total_clicks' => Click::count(),
-                'pending_publishers' => Publisher::where('status', 'pending')->count(),
-                'pending_ads' => Ad::where('status', 'pending')->count(),
-            ],
-        ]);
+        return response()->json(['data' => [
+            'total_publishers' => Publisher::count(), 'total_advertisers' => Advertiser::count(),
+            'total_impressions' => Impression::count(), 'total_clicks' => Click::count(),
+            'pending_publishers' => Publisher::where('status', 'pending')->count(), 'pending_ads' => Ad::where('status', 'pending')->count(),
+        ]]);
     }
 
     public function publishers(Request $request)
     {
-        $status = $request->query('status', 'pending');
+        $request->validate(['status' => 'nullable|in:pending,approved,rejected,suspended']);
 
-        $publishers = Publisher::where('status', $status)
-            ->with('user:id,name,email')
-            ->latest()
-            ->paginate(20);
-
-        return response()->json([
-            'status' => 'success',
-            'data' => $publishers,
-        ]);
-    }
-
-    public function approvePublisher(Request $request, Publisher $publisher)
-    {
-        $request->validate([
-            'status' => 'required|in:approved,rejected',
-        ]);
-
-        $publisher->update([
-            'status' => $request->status,
-            'approved_at' => $request->status === 'approved' ? now() : null,
-        ]);
-
-        return response()->json([
-            'status' => 'success',
-            'data' => $publisher->fresh(),
-        ]);
+        return response()->json(['data' => Publisher::where('status', $request->query('status', 'pending'))->with('user:id,name,email')->latest()->paginate(20)]);
     }
 
     public function ads(Request $request)
     {
-        $status = $request->query('status', 'pending');
+        $request->validate(['status' => 'nullable|in:pending,approved,rejected']);
 
-        $ads = Ad::where('status', $status)
-            ->with(['campaign.advertiser.user:id,name'])
-            ->latest()
-            ->paginate(20);
+        return response()->json(['data' => Ad::where('status', $request->query('status', 'pending'))->with('campaign.advertiser.user:id,name,email')->latest()->paginate(20)]);
+    }
 
-        return response()->json([
-            'status' => 'success',
-            'data' => $ads,
-        ]);
+    public function approvePublisher(Request $request, Publisher $publisher)
+    {
+        return $this->decide($request, $publisher, 'publisher');
     }
 
     public function approveAd(Request $request, Ad $ad)
     {
-        $request->validate([
-            'status' => 'required|in:approved,rejected',
-        ]);
+        return $this->decide($request, $ad, 'ad');
+    }
 
-        $ad->update(['status' => $request->status]);
+    private function decide(Request $request, $subject, string $type)
+    {
+        $data = $request->validate(['status' => 'required|in:approved,rejected'.($type === 'publisher' ? ',suspended' : ''), 'reason' => 'nullable|string|max:1000']);
+        if ($data['status'] !== 'approved') {
+            $request->validate(['reason' => 'required|string|min:3|max:1000']);
+        }
+        if ($type === 'publisher' && $data['status'] === 'approved') {
+            abort_unless($subject->verified_at, 422, 'Verify site ownership before approval.');
+        }
+        DB::transaction(function () use ($request, $subject, $data, $type) {
+            $subject->status = $data['status'];
+            $subject->review_reason = $data['reason'] ?? null;
+            if ($type === 'publisher') {
+                $subject->approved_at = $data['status'] === 'approved' ? now() : null;
+            }
+            $subject->save();
+            DB::table('moderation_decisions')->insert(['actor_id' => $request->user()->id, 'subject_type' => $type, 'subject_id' => $subject->id, 'status' => $data['status'], 'reason' => $data['reason'] ?? null, 'created_at' => now(), 'updated_at' => now()]);
+        });
 
-        return response()->json([
-            'status' => 'success',
-            'data' => $ad->fresh(),
-        ]);
+        return response()->json(['data' => $subject->fresh()]);
     }
 }

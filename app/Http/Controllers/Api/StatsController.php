@@ -3,31 +3,47 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AdUnit;
+use App\Models\Campaign;
 use App\Models\Click;
-use App\Models\DailyStat;
 use App\Models\Impression;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class StatsController extends Controller
 {
+    private function range(Request $request): array
+    {
+        $request->validate(['from' => 'nullable|date_format:Y-m-d', 'to' => 'nullable|date_format:Y-m-d|after_or_equal:from']);
+        $from = $request->query('from', now('Asia/Baku')->subDays(29)->toDateString());
+        $to = $request->query('to', now('Asia/Baku')->toDateString());
+        abort_if(Carbon::parse($from)->diffInDays(Carbon::parse($to), false) > 366 || $from > $to, 422, 'Choose a date range of at most 366 days.');
+
+        return [$from, $to];
+    }
+
+    private function dateExpression(): string
+    {
+        return DB::connection()->getDriverName() === 'sqlite' ? "DATE(created_at, '+4 hours')" : 'DATE(DATE_ADD(created_at, INTERVAL 4 HOUR))';
+    }
+
     /**
      * Campaign stats overview with time range
      */
     public function campaignStats(Request $request, $campaignId)
     {
         $advertiser = $request->user()->advertiser;
-        if (!$advertiser) {
+        if (! $advertiser) {
             return response()->json(['status' => 'error', 'message' => 'Not an advertiser'], 403);
         }
 
         $campaign = $advertiser->campaigns()->find($campaignId);
-        if (!$campaign) {
+        if (! $campaign) {
             return response()->json(['status' => 'error', 'message' => 'Campaign not found'], 404);
         }
 
-        $from = $request->query('from', now()->subDays(30)->toDateString());
-        $to = $request->query('to', now()->toDateString());
+        [$from, $to] = $this->range($request);
 
         // Daily breakdown
         $daily = $this->getDailyStats('campaign_id', $campaignId, $from, $to);
@@ -40,8 +56,8 @@ class StatsController extends Controller
 
         // By browser
         $byBrowser = Impression::where('campaign_id', $campaignId)
-            ->whereDate('created_at', '>=', $from)
-            ->whereDate('created_at', '<=', $to)
+            ->where('created_at', '>=', Carbon::parse($from, 'Asia/Baku')->utc())
+            ->where('created_at', '<', Carbon::parse($to, 'Asia/Baku')->addDay()->utc())
             ->select('browser', DB::raw('COUNT(*) as count'))
             ->groupBy('browser')
             ->orderByDesc('count')
@@ -49,8 +65,7 @@ class StatsController extends Controller
             ->get();
 
         $totals = $this->getTotals('campaign_id', $campaignId, $from, $to);
-        $totals['spent'] = $campaign->spent;
-        $totals['budget'] = $campaign->budget;
+        // Financial fields are deliberately excluded from date-filtered traffic reports.
 
         return response()->json([
             'status' => 'success',
@@ -72,17 +87,16 @@ class StatsController extends Controller
     public function adUnitStats(Request $request, $adUnitId)
     {
         $publisher = $request->user()->publisher;
-        if (!$publisher) {
+        if (! $publisher) {
             return response()->json(['status' => 'error', 'message' => 'Not a publisher'], 403);
         }
 
         $adUnit = $publisher->adUnits()->find($adUnitId);
-        if (!$adUnit) {
+        if (! $adUnit) {
             return response()->json(['status' => 'error', 'message' => 'Ad unit not found'], 404);
         }
 
-        $from = $request->query('from', now()->subDays(30)->toDateString());
-        $to = $request->query('to', now()->toDateString());
+        [$from, $to] = $this->range($request);
 
         $daily = $this->getDailyStats('ad_unit_id', $adUnitId, $from, $to);
         $byDevice = $this->getBreakdown('device_type', 'ad_unit_id', $adUnitId, $from, $to);
@@ -109,12 +123,11 @@ class StatsController extends Controller
     public function advertiserOverview(Request $request)
     {
         $advertiser = $request->user()->advertiser;
-        if (!$advertiser) {
+        if (! $advertiser) {
             return response()->json(['status' => 'error', 'message' => 'Not an advertiser'], 403);
         }
 
-        $from = $request->query('from', now()->subDays(30)->toDateString());
-        $to = $request->query('to', now()->toDateString());
+        [$from, $to] = $this->range($request);
 
         $daily = $this->getDailyStats('advertiser_id', $advertiser->id, $from, $to);
         $byDevice = $this->getBreakdown('device_type', 'advertiser_id', $advertiser->id, $from, $to);
@@ -122,14 +135,15 @@ class StatsController extends Controller
 
         // Per campaign breakdown
         $byCampaign = Impression::where('advertiser_id', $advertiser->id)
-            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)
+            ->where('created_at', '>=', Carbon::parse($from, 'Asia/Baku')->utc())->where('created_at', '<', Carbon::parse($to, 'Asia/Baku')->addDay()->utc())
             ->select('campaign_id', DB::raw('COUNT(*) as impressions'))
             ->groupBy('campaign_id')
             ->get()
             ->map(function ($row) use ($from, $to) {
                 $clicks = Click::where('campaign_id', $row->campaign_id)
-                    ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)->count();
-                $campaign = \App\Models\Campaign::find($row->campaign_id);
+                    ->where('created_at', '>=', Carbon::parse($from, 'Asia/Baku')->utc())->where('created_at', '<', Carbon::parse($to, 'Asia/Baku')->addDay()->utc())->count();
+                $campaign = Campaign::find($row->campaign_id);
+
                 return [
                     'campaign_id' => $row->campaign_id,
                     'name' => $campaign?->name,
@@ -140,8 +154,6 @@ class StatsController extends Controller
             });
 
         $totals = $this->getTotals('advertiser_id', $advertiser->id, $from, $to);
-        $totals['balance'] = $advertiser->balance;
-        $totals['total_spent'] = $advertiser->total_spent;
 
         return response()->json([
             'status' => 'success',
@@ -163,12 +175,11 @@ class StatsController extends Controller
     public function publisherOverview(Request $request)
     {
         $publisher = $request->user()->publisher;
-        if (!$publisher) {
+        if (! $publisher) {
             return response()->json(['status' => 'error', 'message' => 'Not a publisher'], 403);
         }
 
-        $from = $request->query('from', now()->subDays(30)->toDateString());
-        $to = $request->query('to', now()->toDateString());
+        [$from, $to] = $this->range($request);
 
         $daily = $this->getDailyStats('publisher_id', $publisher->id, $from, $to);
         $byDevice = $this->getBreakdown('device_type', 'publisher_id', $publisher->id, $from, $to);
@@ -176,14 +187,15 @@ class StatsController extends Controller
 
         // Per ad unit breakdown
         $byAdUnit = Impression::where('publisher_id', $publisher->id)
-            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)
+            ->where('created_at', '>=', Carbon::parse($from, 'Asia/Baku')->utc())->where('created_at', '<', Carbon::parse($to, 'Asia/Baku')->addDay()->utc())
             ->select('ad_unit_id', DB::raw('COUNT(*) as impressions'))
             ->groupBy('ad_unit_id')
             ->get()
             ->map(function ($row) use ($from, $to) {
                 $clicks = Click::where('ad_unit_id', $row->ad_unit_id)
-                    ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)->count();
-                $adUnit = \App\Models\AdUnit::find($row->ad_unit_id);
+                    ->where('created_at', '>=', Carbon::parse($from, 'Asia/Baku')->utc())->where('created_at', '<', Carbon::parse($to, 'Asia/Baku')->addDay()->utc())->count();
+                $adUnit = AdUnit::find($row->ad_unit_id);
+
                 return [
                     'ad_unit_id' => $row->ad_unit_id,
                     'name' => $adUnit?->name,
@@ -215,22 +227,22 @@ class StatsController extends Controller
     private function getTotals(string $column, $value, string $from, string $to): array
     {
         $impressions = Impression::where($column, $value)
-            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)->count();
+            ->where('created_at', '>=', Carbon::parse($from, 'Asia/Baku')->utc())->where('created_at', '<', Carbon::parse($to, 'Asia/Baku')->addDay()->utc())->count();
         $uniqueImpressions = Impression::where($column, $value)
             ->where('is_unique', true)
-            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)->count();
+            ->where('created_at', '>=', Carbon::parse($from, 'Asia/Baku')->utc())->where('created_at', '<', Carbon::parse($to, 'Asia/Baku')->addDay()->utc())->count();
         $clicks = Click::where($column, $value)
-            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)->count();
+            ->where('created_at', '>=', Carbon::parse($from, 'Asia/Baku')->utc())->where('created_at', '<', Carbon::parse($to, 'Asia/Baku')->addDay()->utc())->count();
         $uniqueClicks = Click::where($column, $value)
             ->where('is_unique', true)
-            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)->count();
+            ->where('created_at', '>=', Carbon::parse($from, 'Asia/Baku')->utc())->where('created_at', '<', Carbon::parse($to, 'Asia/Baku')->addDay()->utc())->count();
 
         return [
             'impressions' => $impressions,
             'unique_impressions' => $uniqueImpressions,
             'clicks' => $clicks,
             'unique_clicks' => $uniqueClicks,
-            'ctr' => $uniqueImpressions > 0 ? round(($uniqueClicks / $uniqueImpressions) * 100, 2) : 0,
+            'ctr' => $impressions > 0 ? round(($clicks / $impressions) * 100, 2) : 0,
         ];
     }
 
@@ -240,21 +252,21 @@ class StatsController extends Controller
     private function getDailyStats(string $column, $value, string $from, string $to): array
     {
         $impressions = Impression::where($column, $value)
-            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)
-            ->select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as count'))
+            ->where('created_at', '>=', Carbon::parse($from, 'Asia/Baku')->utc())->where('created_at', '<', Carbon::parse($to, 'Asia/Baku')->addDay()->utc())
+            ->select(DB::raw($this->dateExpression().' as date'), DB::raw('COUNT(*) as count'))
             ->groupBy('date')->orderBy('date')
             ->pluck('count', 'date')->toArray();
 
         $clicks = Click::where($column, $value)
-            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)
-            ->select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as count'))
+            ->where('created_at', '>=', Carbon::parse($from, 'Asia/Baku')->utc())->where('created_at', '<', Carbon::parse($to, 'Asia/Baku')->addDay()->utc())
+            ->select(DB::raw($this->dateExpression().' as date'), DB::raw('COUNT(*) as count'))
             ->groupBy('date')->orderBy('date')
             ->pluck('count', 'date')->toArray();
 
         // Build complete date range
         $result = [];
-        $current = \Carbon\Carbon::parse($from);
-        $end = \Carbon\Carbon::parse($to);
+        $current = Carbon::parse($from);
+        $end = Carbon::parse($to);
         while ($current <= $end) {
             $d = $current->toDateString();
             $imp = $impressions[$d] ?? 0;
@@ -267,6 +279,7 @@ class StatsController extends Controller
             ];
             $current->addDay();
         }
+
         return $result;
     }
 
@@ -276,7 +289,7 @@ class StatsController extends Controller
     private function getBreakdown(string $dimension, string $filterColumn, $filterValue, string $from, string $to): array
     {
         $impressions = Impression::where($filterColumn, $filterValue)
-            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)
+            ->where('created_at', '>=', Carbon::parse($from, 'Asia/Baku')->utc())->where('created_at', '<', Carbon::parse($to, 'Asia/Baku')->addDay()->utc())
             ->whereNotNull($dimension)
             ->select($dimension, DB::raw('COUNT(*) as count'))
             ->groupBy($dimension)->orderByDesc('count')
@@ -284,7 +297,7 @@ class StatsController extends Controller
             ->pluck('count', $dimension)->toArray();
 
         $clicks = Click::where($filterColumn, $filterValue)
-            ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)
+            ->where('created_at', '>=', Carbon::parse($from, 'Asia/Baku')->utc())->where('created_at', '<', Carbon::parse($to, 'Asia/Baku')->addDay()->utc())
             ->whereNotNull($dimension)
             ->select($dimension, DB::raw('COUNT(*) as count'))
             ->groupBy($dimension)->orderByDesc('count')
@@ -303,7 +316,8 @@ class StatsController extends Controller
             ];
         }
 
-        usort($result, fn($a, $b) => $b['impressions'] - $a['impressions']);
+        usort($result, fn ($a, $b) => $b['impressions'] - $a['impressions']);
+
         return $result;
     }
 }

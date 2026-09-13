@@ -4,15 +4,16 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Publisher;
+use App\Services\SiteVerification;
 use Illuminate\Http\Request;
 
 class PublisherController extends Controller
 {
     public function dashboard(Request $request)
     {
-        $publisher = $request->user()->publisher;
+        $publisher = $request->user()->publisher()->first();
 
-        if (!$publisher) {
+        if (! $publisher) {
             return response()->json(['status' => 'error', 'message' => 'Not a publisher'], 403);
         }
 
@@ -35,7 +36,7 @@ class PublisherController extends Controller
     public function register(Request $request)
     {
         $request->validate([
-            'website_url' => 'required|url|max:255',
+            'website_url' => 'required|url:http,https|max:255',
             'website_name' => 'required|string|max:255',
             'category' => 'nullable|string|max:100',
         ]);
@@ -49,6 +50,7 @@ class PublisherController extends Controller
             'website_url' => $request->website_url,
             'website_name' => $request->website_name,
             'category' => $request->category,
+            'verification_token' => bin2hex(random_bytes(24)),
         ]);
 
         return response()->json([
@@ -57,11 +59,44 @@ class PublisherController extends Controller
         ], 201);
     }
 
+    public function site(Request $request)
+    {
+        $publisher = $request->user()->publisher()->first();
+        if ($publisher && ! $publisher->verification_token) {
+            $publisher->update(['verification_token' => bin2hex(random_bytes(24))]);
+        }
+
+        return response()->json(['data' => $publisher]);
+    }
+
+    public function verify(Request $request)
+    {
+        $publisher = $request->user()->publisher()->first();
+        abort_unless($publisher, 403);
+        $host = strtolower(parse_url($publisher->website_url, PHP_URL_HOST) ?? '');
+        abort_unless($host && $publisher->verification_token, 422);
+        $records = app(SiteVerification::class)->records('_reklam.'.$host);
+        $expected = 'reklam-verification='.$publisher->verification_token;
+        abort_unless(in_array($expected, $records, true), 422, 'Verification record was not found. DNS updates can take time.');
+        $publisher->update(['verified_at' => now()]);
+
+        return response()->json(['data' => $publisher->fresh()]);
+    }
+
+    public function resubmit(Request $request)
+    {
+        $publisher = $request->user()->publisher()->first();
+        abort_unless($publisher && $publisher->status === 'rejected', 422);
+        $publisher->update(['status' => 'pending']);
+
+        return response()->json(['data' => $publisher->fresh()]);
+    }
+
     public function earnings(Request $request)
     {
-        $publisher = $request->user()->publisher;
+        $publisher = $request->user()->publisher()->first();
 
-        if (!$publisher) {
+        if (! $publisher) {
             return response()->json(['status' => 'error', 'message' => 'Not a publisher'], 403);
         }
 
@@ -82,9 +117,9 @@ class PublisherController extends Controller
             'amount' => 'required|numeric|min:5',
         ]);
 
-        $publisher = $request->user()->publisher;
+        $publisher = $request->user()->publisher()->first();
 
-        if (!$publisher) {
+        if (! $publisher) {
             return response()->json(['status' => 'error', 'message' => 'Not a publisher'], 403);
         }
 

@@ -26,7 +26,7 @@ class AuthController extends Controller
             'password' => Hash::make($request->password),
         ]);
 
-        $token = $user->createToken('auth-token')->plainTextToken;
+        $token = $user->createToken('auth-token', ['*'], now()->addDays(30))->plainTextToken;
 
         return response()->json([
             'status' => 'success',
@@ -46,13 +46,13 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
+        if (! $user || ! Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],
             ]);
         }
 
-        $token = $user->createToken('auth-token')->plainTextToken;
+        $token = $user->createToken('auth-token', ['*'], now()->addDays(30))->plainTextToken;
 
         return response()->json([
             'status' => 'success',
@@ -67,9 +67,11 @@ class AuthController extends Controller
     {
         $request->validate([
             'code' => 'required|string',
-            'code_verifier' => 'required|string',
-            'redirect_uri' => 'required|string',
+            'code_verifier' => 'required|string|min:43|max:128',
+            'redirect_uri' => 'required|url:http,https',
         ]);
+
+        abort_unless(in_array($request->redirect_uri, [rtrim(config('reklam.frontend_url'), '/').'/auth/wallet/callback'], true), 422, 'Invalid redirect URI.');
 
         try {
             $walletApiUrl = env('WALLET_API_URL', 'https://api.kimlik.az/api');
@@ -86,11 +88,12 @@ class AuthController extends Controller
                 'code_verifier' => $request->code_verifier,
             ]);
 
-            if (!$tokenResponse->successful()) {
+            if (! $tokenResponse->successful()) {
                 Log::error('Wallet OAuth token exchange failed', [
                     'status' => $tokenResponse->status(),
-                    'body' => $tokenResponse->body(),
+                    'error' => 'token_exchange_failed',
                 ]);
+
                 return response()->json([
                     'status' => 'error',
                     'message' => 'Failed to exchange authorization code',
@@ -104,6 +107,7 @@ class AuthController extends Controller
                     'status' => $tokenResponse->status(),
                     'error' => $tokens['error'] ?? $tokens['message'] ?? 'unknown',
                 ]);
+
                 return response()->json([
                     'status' => 'error',
                     'message' => 'Failed to get access token',
@@ -114,11 +118,12 @@ class AuthController extends Controller
             $userResponse = Http::withToken($tokens['access_token'])
                 ->get("{$walletApiUrl}/oauth/user");
 
-            if (!$userResponse->successful()) {
+            if (! $userResponse->successful()) {
                 Log::error('Wallet OAuth user fetch failed', [
                     'status' => $userResponse->status(),
-                    'body' => $userResponse->body(),
+                    'error' => 'profile_fetch_failed',
                 ]);
+
                 return response()->json([
                     'status' => 'error',
                     'message' => 'Failed to fetch user data',
@@ -128,9 +133,10 @@ class AuthController extends Controller
             $walletUser = $userResponse->json()['data'];
 
             // Find or create user
-            $user = User::where('wallet_id', $walletUser['id'])
-                ->orWhere('email', $walletUser['email'])
-                ->first();
+            $user = User::where('wallet_id', $walletUser['id'])->first();
+            if (! $user && ! empty($walletUser['email']) && User::where('email', $walletUser['email'])->exists()) {
+                return response()->json(['message' => 'This email already belongs to another account. Contact support to link your account.'], 409);
+            }
 
             if ($user) {
                 $user->update([
@@ -144,7 +150,7 @@ class AuthController extends Controller
             } else {
                 $user = User::create([
                     'name' => $walletUser['name'],
-                    'email' => $walletUser['email'] ?? $walletUser['id'] . '@wallet.user',
+                    'email' => $walletUser['email'] ?? $walletUser['id'].'@wallet.user',
                     'phone' => $walletUser['phone'] ?? null,
                     'avatar' => $walletUser['avatar'] ?? null,
                     'wallet_id' => $walletUser['id'],
@@ -153,7 +159,7 @@ class AuthController extends Controller
                 ]);
             }
 
-            $token = $user->createToken('wallet-auth')->plainTextToken;
+            $token = $user->createToken('wallet-auth', ['*'], now()->addDays(30))->plainTextToken;
 
             return response()->json([
                 'status' => 'success',
@@ -164,12 +170,12 @@ class AuthController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Wallet OAuth error', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
+                'exception' => get_class($e),
             ]);
+
             return response()->json([
                 'status' => 'error',
-                'message' => 'Authentication failed: ' . $e->getMessage(),
+                'message' => 'Authentication failed. Please try again.',
             ], 500);
         }
     }
@@ -186,7 +192,7 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        if (!$user->wallet_id || !$user->wallet_access_token) {
+        if (! $user->wallet_id || ! $user->wallet_access_token) {
             return response()->json(['status' => 'error', 'message' => 'No wallet connected'], 400);
         }
 
@@ -196,7 +202,7 @@ class AuthController extends Controller
             $userResponse = Http::withToken($user->wallet_access_token)
                 ->get("{$walletApiUrl}/oauth/user");
 
-            if (!$userResponse->successful()) {
+            if (! $userResponse->successful()) {
                 return response()->json(['status' => 'error', 'message' => 'Failed to fetch from Kimlik.az'], 400);
             }
 
@@ -214,6 +220,7 @@ class AuthController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Wallet sync error', ['message' => $e->getMessage()]);
+
             return response()->json(['status' => 'error', 'message' => 'Sync failed'], 500);
         }
     }

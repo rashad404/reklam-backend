@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class AdUnit extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'publisher_id', 'name', 'ad_format', 'website_url', 'page_url', 'status',
     ];

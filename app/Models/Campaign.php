@@ -3,11 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Campaign extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
-        'advertiser_id', 'name', 'type', 'budget', 'daily_budget',
+        'request_key', 'advertiser_id', 'name', 'type', 'budget', 'daily_budget',
         'spent', 'cpc_bid', 'cpm_bid', 'status', 'start_date',
         'end_date', 'targeting_json',
     ];

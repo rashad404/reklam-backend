@@ -10,17 +10,26 @@ use App\Models\Click;
 use App\Models\Impression;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class ServeController extends Controller
 {
     // Time windows
     private const IMPRESSION_WINDOW = 1800;   // 30 min - same visitor sees same ad on same unit
+
     private const CLICK_WINDOW = 7200;        // 2 hours - same visitor clicks same ad
+
     private const IP_CLICK_WINDOW = 3600;     // 1 hour - same IP+UA clicks same ad (backup dedup)
+
     private const CLICK_RATE_WINDOW = 60;     // 1 min
+
     private const CLICK_RATE_LIMIT = 5;       // max 5 clicks per min per IP
+
     private const IMPRESSION_RATE_WINDOW = 60;
+
     private const IMPRESSION_RATE_LIMIT = 30;
 
     // Signed visitor ID: alphabet used in generation (no 8, no E, no e)
@@ -35,76 +44,108 @@ class ServeController extends Controller
 
     public function serve(Request $request)
     {
-        $request->validate([
-            'unit' => 'required',
-            'format' => 'nullable|string',
-        ]);
-
-        $adUnit = AdUnit::where('id', $request->unit)
-            ->where('status', 'active')
-            ->first();
-
-        if (!$adUnit) {
-            return response()->json(['ad' => null], 200);
+        $request->validate(['unit' => 'required|integer']);
+        if (! config('reklam.delivery_enabled')) {
+            return response()->json(['ad' => null]);
         }
-
-        $ads = Ad::where('status', 'approved')
-            ->where('ad_format', $adUnit->ad_format)
-            ->whereHas('campaign', function ($q) {
-                $q->where('status', 'active')
-                    ->where(function ($q2) {
-                        $q2->whereNull('start_date')
-                            ->orWhere('start_date', '<=', now());
-                    })
-                    ->where(function ($q2) {
-                        $q2->whereNull('end_date')
-                            ->orWhere('end_date', '>=', now());
-                    })
-                    ->whereColumn('spent', '<', 'budget');
-            })
-            ->with('campaign:id,advertiser_id,cpc_bid,cpm_bid')
-            ->get();
-
+        $adUnit = AdUnit::with('publisher')->find($request->unit);
+        if (! $adUnit || $adUnit->status !== 'active' || $adUnit->publisher?->status !== 'approved' || ! $adUnit->publisher->verified_at) {
+            return response()->json(['ad' => null]);
+        }
+        $referrer = $request->header('Referer', '');
+        if (! $this->isReferrerValid($referrer, $adUnit->website_url)) {
+            return response()->json(['ad' => null]);
+        }
+        if ($referrer) {
+            $adUnit->last_seen_at = now();
+            $adUnit->save();
+        }
+        $today = now(config('reklam.timezone'))->toDateString();
+        $ads = Ad::where('status', 'approved')->where('ad_format', $adUnit->ad_format)
+            ->whereHas('campaign', function ($q) use ($today) {
+                $q->where('status', 'active')->whereColumn('spent', '<', 'budget')
+                    ->where(fn ($q) => $q->whereNull('start_date')->orWhere('start_date', '<=', $today))
+                    ->where(fn ($q) => $q->whereNull('end_date')->orWhere('end_date', '>=', $today))
+                    ->whereHas('advertiser', fn ($q) => $q->where('status', 'active')->where('balance', '>', 0));
+            })->with('campaign.advertiser')->get()->filter(fn ($ad) => $this->eligible($ad, $adUnit))->values();
         if ($ads->isEmpty()) {
-            return response()->json(['ad' => null], 200);
+            return response()->json(['ad' => null]);
+        }
+        // Choose a pricing pool first. Raw CPC and CPM bids are never compared.
+        $groups = $ads->groupBy(fn ($ad) => $ad->campaign->cpc_bid ? 'cpc' : 'cpm')->values();
+        $ad = $this->selectByWeight($groups->random());
+        $payload = ['id' => (string) Str::uuid(), 'ad' => $ad->id, 'unit' => $adUnit->id, 'exp' => time() + 900];
+        $token = Crypt::encryptString(json_encode($payload));
+
+        return response()->json(['ad' => [
+            'id' => $ad->id, 'title' => $ad->title, 'description' => $ad->description, 'image_url' => $ad->image_url,
+            'format' => $ad->ad_format, 'click_url' => url('/api/track/click/'.$ad->id).'?token='.urlencode($token),
+        ], 'unit_id' => $adUnit->id, 'token' => $token])->header('Cache-Control', 'no-store');
+    }
+
+    private function eligible($ad, $unit): bool
+    {
+        if (! config('reklam.delivery_enabled') || ! $ad || ! $unit || $ad->status !== 'approved' || $unit->status !== 'active') {
+            return false;
+        }
+        $c = $ad->campaign;
+        if ($c && ($c->daily_budget || ! empty($c->targeting_json))) {
+            return false;
+        }
+        $today = now(config('reklam.timezone'))->toDateString();
+        if (! $c || $c->status !== 'active' || $c->spent >= $c->budget || $c->advertiser?->status !== 'active' || $c->advertiser->balance <= 0) {
+            return false;
+        }
+        if ($c->start_date && $c->start_date->toDateString() > $today || $c->end_date && $c->end_date->toDateString() < $today) {
+            return false;
         }
 
-        // Weighted random selection: higher bid = shown more often
-        $ad = $this->selectByWeight($ads);
+        return $unit->publisher?->status === 'approved' && (bool) $unit->publisher->verified_at && $ad->ad_format === $unit->ad_format;
+    }
 
-        // Return relative paths - serve.js will prepend the correct base URL
-        $imageUrl = $ad->image_url;
-        if ($imageUrl && preg_match('#https?://#', $imageUrl)) {
-            $path = parse_url($imageUrl, PHP_URL_PATH);
-            if ($path) {
-                $imageUrl = $path; // /storage/banners/xxx.png
+    private function delivery(Request $request): ?array
+    {
+        try {
+            $p = json_decode(Crypt::decryptString($request->input('token', '')), true);
+            if (! is_array($p) || ($p['exp'] ?? 0) < time() || ! isset($p['id'],$p['ad'],$p['unit'])) {
+                return null;
             }
+
+            return $p;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    private function claim(array $delivery, string $kind): bool
+    {
+        return DB::table('delivery_events')->insertOrIgnore([
+            'delivery_id' => $delivery['id'], 'kind' => $kind, 'created_at' => now(),
+        ]) === 1;
+    }
+
+    public function trackViewable(Request $request)
+    {
+        $p = $this->delivery($request);
+        if ($p && $this->eligible(Ad::with('campaign.advertiser')->find($p['ad']), AdUnit::with('publisher')->find($p['unit']))
+            && DB::table('delivery_events')->where('delivery_id', $p['id'])->where('kind', 'impression')->exists()) {
+            $this->claim($p, 'viewable');
         }
 
-        return response()->json([
-            'ad' => [
-                'id' => $ad->id,
-                'title' => $ad->title,
-                'description' => $ad->description,
-                'image_url' => $imageUrl,
-                'destination_url' => $ad->destination_url,
-                'format' => $ad->ad_format,
-                'click_url' => "/api/track/click/{$ad->id}",
-            ],
-            'unit_id' => $adUnit->id,
-        ]);
+        return response()->json(['status' => 'ok']);
     }
 
     public function trackImpression(Request $request)
     {
-        $request->validate([
-            'ad_id' => 'required|exists:ads,id',
-            'unit_id' => 'required|exists:ad_units,id',
-        ]);
+        $delivery = $this->delivery($request);
+        if (! $delivery) {
+            return response()->json(['status' => 'ok']);
+        }
+        $request->merge(['ad_id' => $delivery['ad'], 'unit_id' => $delivery['unit']]);
 
         $ip = $this->getClientIp($request);
         $ua = $request->userAgent() ?? '';
-        $vid = $request->input('vid', '');
+        $vid = hash('sha256', $ip.'|'.$ua);
         $sid = $request->input('sid', '');
 
         // 1. Bot check
@@ -113,30 +154,36 @@ class ServeController extends Controller
         }
 
         // 2. Validate visitor ID signature
-        if (!$this->isValidVid($vid)) {
+        if (! $delivery) {
             Log::info('Impression rejected: invalid vid', ['vid' => $vid, 'ip' => $ip]);
+
             return response()->json(['status' => 'ok']);
         }
 
         // 3. Rate limit per IP
         $rateKey = "imp_rate:{$ip}";
-        $rateCount = Cache::get($rateKey, 0);
+        Cache::add($rateKey, 0, 60);
+        $rateCount = Cache::increment($rateKey);
         if ($rateCount >= self::IMPRESSION_RATE_LIMIT) {
             return response()->json(['status' => 'ok']);
         }
-        Cache::put($rateKey, $rateCount + 1, self::IMPRESSION_RATE_WINDOW);
 
         $ad = Ad::with('campaign.advertiser')->find($request->ad_id);
         $adUnit = AdUnit::find($request->unit_id);
 
-        if (!$ad || !$adUnit) {
+        if (! $this->eligible($ad, $adUnit)) {
             return response()->json(['status' => 'error'], 400);
         }
 
         // 4. Referrer check
         $referrer = $request->header('Referer', '');
-        if (!$this->isReferrerValid($referrer, $adUnit->website_url)) {
+        if (! $this->isReferrerValid($referrer, $adUnit->website_url)) {
             Log::info('Impression referrer mismatch', ['referrer' => $referrer, 'unit' => $adUnit->website_url, 'ip' => $ip]);
+
+            return response()->json(['status' => 'ok']);
+        }
+
+        if (! $this->claim($delivery, 'impression')) {
             return response()->json(['status' => 'ok']);
         }
 
@@ -144,19 +191,7 @@ class ServeController extends Controller
         $isUnique = true;
 
         $dedupKey = "imp:{$vid}:{$request->ad_id}:{$request->unit_id}";
-        if (Cache::has($dedupKey)) {
-            $isUnique = false;
-        } else {
-            Cache::put($dedupKey, true, self::IMPRESSION_WINDOW);
-            // Secondary dedup: IP + UA hash
-            $uaHash = substr(md5($ua), 0, 8);
-            $ipDedupKey = "imp_ip:{$ip}:{$uaHash}:{$request->ad_id}:{$request->unit_id}";
-            if (Cache::has($ipDedupKey)) {
-                $isUnique = false;
-            } else {
-                Cache::put($ipDedupKey, true, self::IMPRESSION_WINDOW);
-            }
-        }
+        $isUnique = Cache::add($dedupKey, true, self::IMPRESSION_WINDOW);
 
         // 6. Always record impression
         $parsed = TrackingHelper::parseUserAgent($ua);
@@ -201,14 +236,18 @@ class ServeController extends Controller
     {
         $ad = Ad::with('campaign.advertiser')->find($adId);
 
-        if (!$ad) {
+        if (! $ad) {
             return redirect('/');
         }
 
         $ip = $this->getClientIp($request);
         $ua = $request->userAgent() ?? '';
-        $vid = $request->query('vid', '');
-        $unitId = $request->query('unit');
+        $delivery = $this->delivery($request);
+        if (! $delivery || (int) $delivery['ad'] !== (int) $adId) {
+            return redirect($ad->destination_url);
+        }
+        $vid = hash('sha256', $ip.'|'.$ua);
+        $unitId = $delivery['unit'];
         $adUnit = $unitId ? AdUnit::find($unitId) : null;
 
         // 1. Bot check
@@ -217,24 +256,26 @@ class ServeController extends Controller
         }
 
         // 2. Validate visitor ID signature
-        if (!$this->isValidVid($vid)) {
+        if (! $this->eligible($ad, $adUnit)) {
             Log::info('Click rejected: invalid vid', ['vid' => $vid, 'ip' => $ip, 'ad' => $adId]);
+
             return redirect($ad->destination_url);
         }
 
         // 3. Rate limit per IP
         $rateKey = "click_rate:{$ip}";
-        $rateCount = Cache::get($rateKey, 0);
+        Cache::add($rateKey, 0, 60);
+        $rateCount = Cache::increment($rateKey);
         if ($rateCount >= self::CLICK_RATE_LIMIT) {
             return redirect($ad->destination_url);
         }
-        Cache::put($rateKey, $rateCount + 1, self::CLICK_RATE_WINDOW);
 
         // 4. Referrer check
         if ($adUnit) {
             $referrer = $request->header('Referer', '');
-            if (!$this->isReferrerValid($referrer, $adUnit->website_url)) {
+            if (! $this->isReferrerValid($referrer, $adUnit->website_url)) {
                 Log::info('Click referrer mismatch', ['referrer' => $referrer, 'unit' => $adUnit->website_url, 'ip' => $ip]);
+
                 return redirect($ad->destination_url);
             }
         }
@@ -242,19 +283,11 @@ class ServeController extends Controller
         // 5. Check uniqueness
         $isUnique = true;
 
-        $dedupKey = "click:{$vid}:{$adId}";
-        if (Cache::has($dedupKey)) {
-            $isUnique = false;
-        } else {
-            Cache::put($dedupKey, true, self::CLICK_WINDOW);
-            $uaHash = substr(md5($ua), 0, 8);
-            $ipDedupKey = "click_ip:{$ip}:{$uaHash}:{$adId}";
-            if (Cache::has($ipDedupKey)) {
-                $isUnique = false;
-            } else {
-                Cache::put($ipDedupKey, true, self::IP_CLICK_WINDOW);
-            }
+        if (! $this->claim($delivery, 'click')) {
+            return redirect($ad->destination_url);
         }
+        $dedupKey = "click:{$vid}:{$adId}";
+        $isUnique = Cache::add($dedupKey, true, self::CLICK_WINDOW);
 
         // 6. Always record click
         $parsed = TrackingHelper::parseUserAgent($ua);
@@ -313,7 +346,7 @@ class ServeController extends Controller
         }
 
         $totalWeight = array_sum($weights);
-        $random = mt_rand(1, (int) $totalWeight);
+        $random = mt_rand(1, max(1, (int) ceil($totalWeight)));
 
         $cumulative = 0;
         foreach ($ads as $i => $ad) {
@@ -324,66 +357,6 @@ class ServeController extends Controller
         }
 
         return $ads->last();
-    }
-
-    /**
-     * Validate the signed visitor ID from serve.js
-     *
-     * Rules:
-     * - Exactly 16 characters
-     * - Position 1 must be 'k'
-     * - Position 7 must be 'z'
-     * - Must not contain '8', 'E', or 'e'
-     * - Last 2 chars must be valid checksum of positions 3-12
-     * - All chars must be from SAFE_CHARS alphabet
-     */
-    private function isValidVid(string $vid): bool
-    {
-        if (strlen($vid) !== 16) {
-            return false;
-        }
-
-        // Signature positions
-        if ($vid[1] !== 'k' || $vid[7] !== 'z') {
-            return false;
-        }
-
-        // Forbidden characters
-        if (strpbrk($vid, '8Ee') !== false) {
-            return false;
-        }
-
-        // All non-signature chars must be in safe alphabet
-        for ($i = 0; $i < 16; $i++) {
-            if ($i === 1 || $i === 7) continue; // signature positions
-            if (strpos(self::SAFE_CHARS, $vid[$i]) === false) {
-                return false;
-            }
-        }
-
-        // Checksum validation: last 2 chars = checksum of positions 3-12
-        $middle = substr($vid, 3, 10);
-        $expected = $this->checksum($middle);
-        $actual = substr($vid, 14, 2);
-
-        if ($expected !== $actual) {
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * Same checksum algorithm as serve.js
-     */
-    private function checksum(string $str): string
-    {
-        $sum = 0;
-        for ($i = 0; $i < strlen($str); $i++) {
-            $sum = (($sum << 3) - $sum + ord($str[$i])) & 0xffff;
-        }
-        $chars = self::SAFE_CHARS;
-        return $chars[$sum % strlen($chars)] . $chars[($sum >> 5) % strlen($chars)];
     }
 
     /**
@@ -406,7 +379,7 @@ class ServeController extends Controller
         $referrerHost = preg_replace('/^www\./', '', $referrerHost);
         $unitHost = preg_replace('/^www\./', '', $unitHost);
 
-        return str_contains($referrerHost, $unitHost) || str_contains($unitHost, $referrerHost);
+        return strtolower($referrerHost) === strtolower($unitHost) || str_ends_with(strtolower($referrerHost), '.'.strtolower($unitHost));
     }
 
     /**
@@ -414,15 +387,6 @@ class ServeController extends Controller
      */
     private function getClientIp(Request $request): string
     {
-        if ($request->header('CF-Connecting-IP')) {
-            return $request->header('CF-Connecting-IP');
-        }
-
-        $forwarded = $request->header('X-Forwarded-For');
-        if ($forwarded) {
-            return trim(explode(',', $forwarded)[0]);
-        }
-
         return $request->ip() ?? '0.0.0.0';
     }
 

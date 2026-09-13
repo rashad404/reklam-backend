@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class DailyStat extends Model
 {
     protected $fillable = [
-        'date', 'ad_id', 'campaign_id', 'ad_unit_id',
+        'country', 'device_type', 'date', 'ad_id', 'campaign_id', 'ad_unit_id',
         'publisher_id', 'advertiser_id', 'impressions',
         'clicks', 'ctr', 'spent', 'earned',
     ];

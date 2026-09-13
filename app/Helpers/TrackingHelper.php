@@ -29,7 +29,7 @@ class TrackingHelper
             $browser = 'chrome';
         } elseif (str_contains($ua, 'firefox') || str_contains($ua, 'fxios')) {
             $browser = 'firefox';
-        } elseif (str_contains($ua, 'safari') && !str_contains($ua, 'chrome')) {
+        } elseif (str_contains($ua, 'safari') && ! str_contains($ua, 'chrome')) {
             $browser = 'safari';
         } elseif (str_contains($ua, 'msie') || str_contains($ua, 'trident')) {
             $browser = 'ie';
@@ -68,43 +68,7 @@ class TrackingHelper
      */
     public static function getCountryFromIp(string $ip): ?string
     {
-        // Skip private/local IPs
-        if (self::isPrivateIp($ip)) {
-            return null;
-        }
-
-        // Use cache to avoid hitting API for same IP
-        $cacheKey = "geo:{$ip}";
-        $cached = \Illuminate\Support\Facades\Cache::get($cacheKey);
-        if ($cached !== null) {
-            return $cached ?: null;
-        }
-
-        try {
-            $response = \Illuminate\Support\Facades\Http::timeout(2)
-                ->get("http://ip-api.com/json/{$ip}?fields=countryCode");
-
-            if ($response->successful()) {
-                $country = $response->json('countryCode');
-                \Illuminate\Support\Facades\Cache::put($cacheKey, $country ?? '', 86400); // cache 24h
-                return $country;
-            }
-        } catch (\Exception $e) {
-            // Silently fail - geo is optional
-        }
-
-        \Illuminate\Support\Facades\Cache::put($cacheKey, '', 3600); // cache failure for 1h
+        // Geography is unknown until a licensed local enrichment source is configured.
         return null;
-    }
-
-    private static function isPrivateIp(string $ip): bool
-    {
-        return str_starts_with($ip, '10.') ||
-               str_starts_with($ip, '172.') ||
-               str_starts_with($ip, '192.168.') ||
-               str_starts_with($ip, '127.') ||
-               str_starts_with($ip, '100.') ||
-               $ip === '0.0.0.0' ||
-               $ip === '::1';
     }
 }
