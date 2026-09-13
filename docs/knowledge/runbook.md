@@ -73,3 +73,5 @@ Kimlik login hotfix: backend commit `28298f4` was applied atomically to the acti
 
 
 Public marketing copy is deployed as frontend `20260913-marketing`, source commit `d283b2e`. The ecosystem file in that release selects its standalone server. v8 remains available for a frontend rollback. Backend v4 retains the Kimlik configuration hotfix.
+
+Specificity revision: frontend release `20260913-editorial`, source commit `7bd3360`, applies the azdoc research to public copy and composition. It replaces repeated feature/step blocks with audience-specific content and native FAQs. The prior `20260913-marketing` release is retained for rollback. Backend remains v4 with the Kimlik fix. Evidence: audits/2026-09-12-specific-design.md.

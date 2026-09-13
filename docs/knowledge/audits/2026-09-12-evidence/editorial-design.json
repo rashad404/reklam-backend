@@ -1,0 +1,27 @@
+{
+  "release": "20260913-editorial",
+  "source": "7bd3360",
+  "audit_time": "2026-09-13T02:05:07.304Z",
+  "lighthouse_version": "13.4.1",
+  "scores": {
+    "performance": 0.97,
+    "accessibility": 1,
+    "best-practices": 1,
+    "seo": 1,
+    "agentic-browsing": 1
+  },
+  "metrics": {
+    "largest-contentful-paint": {
+      "value": 2611.9215,
+      "unit": "millisecond"
+    },
+    "cumulative-layout-shift": {
+      "value": 0.02956627020695956,
+      "unit": "unitless"
+    },
+    "total-blocking-time": {
+      "value": 0,
+      "unit": "millisecond"
+    }
+  }
+}

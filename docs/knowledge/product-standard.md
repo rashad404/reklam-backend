@@ -13,3 +13,6 @@ Fix problems within the authorized task before calling it complete. Store detail
 Production copy must describe the product, not the rollout. Do not put release disclaimers, demo-status language, or payment-unavailability banners on public pages. Until payment functionality is enabled, only payment pages should say it will be available soon. Public ad-format displays use real Reklam.biz house advertising with advertising attribution. Do not call the production product a demo.
 
 Public marketing should answer why advertisers and publishers should join: customer discovery, advertising revenue, suitable formats, budget control and useful results. Do not turn the homepage or acquisition pages into an implementation checklist. Review, verification, validation and installation mechanics belong in contextual workspace instructions and help. Keep benefit claims grounded, without invented reach, guaranteed sales or guaranteed income.
+
+
+Use specificity as the standard for avoiding a generic generated feel: plain local copy, a hierarchy shaped by advertiser/publisher questions, meaningful ad visuals and finished interactions. Avoid filling repeated sections with slogans or adding icons and nested cards by default. See design.md and plans/2026-09-12-specific-design.md for the azdoc research application.

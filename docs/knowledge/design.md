@@ -14,7 +14,7 @@ Preserve the existing logo and red identity. Use warm public backgrounds, ink-co
 - Main action red #d82c40; smaller red text #c52237 for contrast. Dark theme uses lighter accents.
 - Public canvas #fcfbf9, workspace canvas #f6f7f9, ink #17191f. Use CSS variables for themed surfaces and text.
 - Buttons and inputs use 10px corners, cards generally 18px. Focus must be visible, controls at least 44px tall, and motion respects reduced-motion preferences.
-- Public page hierarchy: composed headline and real house ad, capability row, audience choices, numbered process, final action. Inner pages adapt this hierarchy to their task.
+- Public page hierarchy follows the audiences: direct headline and working house ad, open advertiser information, a distinct publisher section, useful questions and a compact final action. Avoid a repeated sequence of icon benefits, rounded cards and numbered slogans. Inner pages include the relevant audience content, not an identical full homepage.
 - Authenticated screens use a persistent desktop sidebar, account menu, and responsive horizontal navigation. Keep tables, editor steps, validation, empty states and failures legible.
 - Public footer explains the product and links to useful pages. Workspace footer is compact.
 
@@ -27,3 +27,9 @@ House ads promote Reklam.biz itself in all three languages and supported banner 
 ## Verification
 
 Inspect public and authenticated pages at 320px, 390px and desktop, including Russian labels, both themes, forms and long lists. Check keyboard focus, overflow, contrast and missing translations. Exercise format selection and links, campaign persistence, placement installation, moderation and support replies. Compilation alone is insufficient. Keep public canonical/hreflang metadata and private noindex intact.
+
+## Specificity and editorial judgment
+
+Apply the azdoc research summarized in plans/2026-09-12-specific-design.md. An "AI-looking" impression is not an authorship test. Diagnose interchangeable wording, mechanical repetition, decoration without meaning and uneven execution. Fix those concrete weaknesses. Do not replace the current identity with another fashionable template, invented social proof or arbitrary novelty.
+
+Use the product itself as visual substance: supported ad formats, credible house advertising, actual placement choices and real interactions. Give information different layouts when its role differs. Write Azerbaijani from the intended meaning, keep it short, and remove phrases that merely sound polished. Review all locales in their full page context.
