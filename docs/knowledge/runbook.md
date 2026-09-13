@@ -62,3 +62,9 @@ Health monitor: `bash <release>/backend/scripts/product-monitor.sh`. Its output 
 
 
 Support is handled inside the product. Operators should check `/admin/support` and answer requests there; users read replies at `/settings/support`. There is no configured email notification channel. The support table is additive and may remain when rolling back the UI. Do not restore a database merely to roll back a support-page change.
+
+
+Copy follow-up: frontend release `20260912-v5` removes public rollout/payment disclaimers and uses coming-soon copy only on payment pages. The API and its scheduler remain on `20260912-v4`. The v5 ecosystem file controls the frontend.
+
+
+Design rebuild: final frontend release `20260912-v8` uses the new public and account design. Its ecosystem file controls the frontend standalone server. Source commit `b7febd4` includes the full redesign from `9e1315e` plus stable initial rendering and the larger ad attribution target. API, cron and monitoring remain on `20260912-v4`. To roll back only the design, switch the verified Reklam PM2 process to the retained v6 ecosystem file; do not roll back the database.

@@ -9,3 +9,5 @@ Verify UI changes in a rendered browser at 320px, 390px and desktop, with keyboa
 Public content should explain actual tasks. Use localized metadata, canonical language URLs and private workspace noindex. Use natural Azerbaijani, full language characters and ASCII punctuation. Keep dependencies and page weight purposeful. Do not claim ranking or field performance from lab checks.
 
 Fix problems within the authorized task before calling it complete. Store detailed evidence in knowledge plans/audits. These requirements do not introduce another approval step. Do not spawn agents unless separately authorized.
+
+Production copy must describe the product, not the rollout. Do not put release disclaimers, demo-status language, or payment-unavailability banners on public pages. Until payment functionality is enabled, only payment pages should say it will be available soon. Public ad-format displays use real Reklam.biz house advertising with advertising attribution. Do not call the production product a demo.

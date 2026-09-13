@@ -1,0 +1,132 @@
+{
+  "public_pages": 21,
+  "private_noindex": 3,
+  "pages": [
+    {
+      "url": "https://reklam.biz/",
+      "status": 200,
+      "language": "az",
+      "canonical": "https://reklam.biz"
+    },
+    {
+      "url": "https://reklam.biz/en",
+      "status": 200,
+      "language": "en",
+      "canonical": "https://reklam.biz/en"
+    },
+    {
+      "url": "https://reklam.biz/ru",
+      "status": 200,
+      "language": "ru",
+      "canonical": "https://reklam.biz/ru"
+    },
+    {
+      "url": "https://reklam.biz/for-advertisers",
+      "status": 200,
+      "language": "az",
+      "canonical": "https://reklam.biz/for-advertisers"
+    },
+    {
+      "url": "https://reklam.biz/en/for-advertisers",
+      "status": 200,
+      "language": "en",
+      "canonical": "https://reklam.biz/en/for-advertisers"
+    },
+    {
+      "url": "https://reklam.biz/ru/for-advertisers",
+      "status": 200,
+      "language": "ru",
+      "canonical": "https://reklam.biz/ru/for-advertisers"
+    },
+    {
+      "url": "https://reklam.biz/for-publishers",
+      "status": 200,
+      "language": "az",
+      "canonical": "https://reklam.biz/for-publishers"
+    },
+    {
+      "url": "https://reklam.biz/en/for-publishers",
+      "status": 200,
+      "language": "en",
+      "canonical": "https://reklam.biz/en/for-publishers"
+    },
+    {
+      "url": "https://reklam.biz/ru/for-publishers",
+      "status": 200,
+      "language": "ru",
+      "canonical": "https://reklam.biz/ru/for-publishers"
+    },
+    {
+      "url": "https://reklam.biz/ad-formats",
+      "status": 200,
+      "language": "az",
+      "canonical": "https://reklam.biz/ad-formats"
+    },
+    {
+      "url": "https://reklam.biz/en/ad-formats",
+      "status": 200,
+      "language": "en",
+      "canonical": "https://reklam.biz/en/ad-formats"
+    },
+    {
+      "url": "https://reklam.biz/ru/ad-formats",
+      "status": 200,
+      "language": "ru",
+      "canonical": "https://reklam.biz/ru/ad-formats"
+    },
+    {
+      "url": "https://reklam.biz/help",
+      "status": 200,
+      "language": "az",
+      "canonical": "https://reklam.biz/help"
+    },
+    {
+      "url": "https://reklam.biz/en/help",
+      "status": 200,
+      "language": "en",
+      "canonical": "https://reklam.biz/en/help"
+    },
+    {
+      "url": "https://reklam.biz/ru/help",
+      "status": 200,
+      "language": "ru",
+      "canonical": "https://reklam.biz/ru/help"
+    },
+    {
+      "url": "https://reklam.biz/privacy",
+      "status": 200,
+      "language": "az",
+      "canonical": "https://reklam.biz/privacy"
+    },
+    {
+      "url": "https://reklam.biz/en/privacy",
+      "status": 200,
+      "language": "en",
+      "canonical": "https://reklam.biz/en/privacy"
+    },
+    {
+      "url": "https://reklam.biz/ru/privacy",
+      "status": 200,
+      "language": "ru",
+      "canonical": "https://reklam.biz/ru/privacy"
+    },
+    {
+      "url": "https://reklam.biz/terms",
+      "status": 200,
+      "language": "az",
+      "canonical": "https://reklam.biz/terms"
+    },
+    {
+      "url": "https://reklam.biz/en/terms",
+      "status": 200,
+      "language": "en",
+      "canonical": "https://reklam.biz/en/terms"
+    },
+    {
+      "url": "https://reklam.biz/ru/terms",
+      "status": 200,
+      "language": "ru",
+      "canonical": "https://reklam.biz/ru/terms"
+    }
+  ]
+}

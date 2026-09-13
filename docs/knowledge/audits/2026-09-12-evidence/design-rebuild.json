@@ -1,0 +1,41 @@
+{
+  "release": "20260912-v8",
+  "source_commit": "b7febd4",
+  "url": "https://reklam.biz/",
+  "audit_time": "2026-09-13T01:38:50.691Z",
+  "lighthouse_version": "13.4.1",
+  "scores": {
+    "performance": 0.97,
+    "accessibility": 1,
+    "best-practices": 1,
+    "seo": 1,
+    "agentic-browsing": 1
+  },
+  "metrics": {
+    "largest-contentful-paint": {
+      "value": 2599.0715,
+      "unit": "millisecond"
+    },
+    "cumulative-layout-shift": {
+      "value": 0.02814639762836568,
+      "unit": "unitless"
+    },
+    "total-blocking-time": {
+      "value": 16,
+      "unit": "millisecond"
+    }
+  },
+  "workspace_review": {
+    "routes": 12,
+    "widths": [
+      1440,
+      390,
+      320
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "violations": []
+  }
+}
