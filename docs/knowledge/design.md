@@ -33,3 +33,5 @@ Inspect public and authenticated pages at 320px, 390px and desktop, including Ru
 Apply the azdoc research summarized in plans/2026-09-12-specific-design.md. An "AI-looking" impression is not an authorship test. Diagnose interchangeable wording, mechanical repetition, decoration without meaning and uneven execution. Fix those concrete weaknesses. Do not replace the current identity with another fashionable template, invented social proof or arbitrary novelty.
 
 Use the product itself as visual substance: supported ad formats, credible house advertising, actual placement choices and real interactions. Give information different layouts when its role differs. Write Azerbaijani from the intended meaning, keep it short, and remove phrases that merely sound polished. Review all locales in their full page context.
+
+The public format gallery places advertising attribution below the creative, outside its fixed dimensions. Keep a usable link target without expanding an overlay across banner content, especially at 320x50. Reserve label space before loading to avoid movement.
